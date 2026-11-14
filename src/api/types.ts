@@ -6,31 +6,79 @@ export interface AuthResponse {
   userId: number
 }
 
-export interface Profile {
+/** The privilege level of a person: the base of the future subscription plans. Set by the server. */
+export type Privilege = 'STANDARD' | 'PRO' | 'MAX'
+
+export interface Photo {
+  /** What remove / make-main take; meaningful only to the owner. */
+  id: number
+  /** The server path of the photo (/public/photo/<token>). Shown through serverFileUrl() of api/http.ts. */
+  url: string
+}
+
+/** A question the person chose and their answer. */
+export interface Prompt {
+  question: string
+  answer: string
+}
+
+/** A person in a list (search results): just enough to recognise them. */
+export interface ProfileCard {
   userId: number
   displayName: string
-  bio: string | null
   city: string | null
-  birthDate: string | null // a date, not a moment: 1995-03-01
-  /**
-   * The server path of the uploaded picture (/public/avatar/<token>), never a link to another
-   * site. Shown through serverFileUrl() of api/http.ts.
-   */
   avatarUrl: string | null
 }
 
+/** A person's profile as anyone logged in sees it. No e-mail, no date of birth - only the age. */
+export interface Profile {
+  userId: number
+  displayName: string
+  /** Whole years; null if the person gave no date of birth. */
+  age: number | null
+  pronouns: string | null
+  city: string | null
+  hometown: string | null
+  occupation: string | null
+  education: string | null
+  languages: string | null
+  bio: string | null
+  /** The address of the main photo (the first of `photos`); null without photos. */
+  avatarUrl: string | null
+  privilege: Privilege
+  /** All photos, the main one first. */
+  photos: Photo[]
+  interests: string[]
+  prompts: Prompt[]
+}
+
+/** The current user's own profile: everything others see, plus what only they may see. */
 export interface MyProfile extends Profile {
   email: string
   /** The person confirmed the address by the link we sent. Reminders go only to a confirmed one. */
   emailVerified: boolean
+  /** A date, not a moment: 1995-03-01. Others see only `age`. */
+  birthDate: string | null
+  /** How many photos the privilege level allows. */
+  maxPhotos: number
 }
 
-/** The text part of a profile. The picture is uploaded separately, as a file. */
+/**
+ * Everything a person writes about themselves; the whole of it is replaced on every save. Photos
+ * are uploaded separately as files, and the privilege level cannot be sent at all.
+ */
 export interface UpdateProfileRequest {
   displayName: string
-  bio: string | null
-  city: string | null
   birthDate: string | null
+  pronouns: string | null
+  city: string | null
+  hometown: string | null
+  occupation: string | null
+  education: string | null
+  languages: string | null
+  bio: string | null
+  interests: string[]
+  prompts: Prompt[]
 }
 
 export interface Friend {

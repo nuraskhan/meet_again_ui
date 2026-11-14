@@ -70,6 +70,13 @@ export const router = createRouter({
           props: (route) => ({ chatId: Number(route.params.chatId) }),
         },
         { path: 'profile', name: 'profile', component: () => import('./views/ProfileView.vue') },
+        {
+          // A person as others see them.
+          path: 'people/:userId(\\d+)',
+          name: 'person',
+          component: () => import('./views/PersonView.vue'),
+          props: (route) => ({ userId: Number(route.params.userId) }),
+        },
       ],
     },
     { path: '/:rest(.*)*', redirect: { name: 'welcome' } },

@@ -3,7 +3,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api'
-import type { Friend, FriendRequest, Profile } from '@/api/types'
+import type { Friend, FriendRequest, ProfileCard } from '@/api/types'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { date } from '@/lib/format'
 import { toastError, toastOk } from '@/stores/toast'
@@ -14,7 +14,7 @@ const outgoing = ref<FriendRequest[]>([])
 const loading = ref<boolean>(true)
 
 const searchText = ref<string>('')
-const found = ref<Profile[]>([])
+const found = ref<ProfileCard[]>([])
 const searched = ref<boolean>(false)
 const searching = ref<boolean>(false)
 
@@ -63,7 +63,7 @@ async function search(): Promise<void> {
   }
 }
 
-async function add(person: Profile): Promise<void> {
+async function add(person: ProfileCard): Promise<void> {
   await change('add-' + person.userId, async () => {
     await api.sendFriendRequest(person.userId)
     toastOk('Request sent to ' + person.displayName)
@@ -130,7 +130,9 @@ async function change(what: string, action: () => Promise<void>): Promise<void> 
         <li v-for="person in found" :key="person.userId" class="people__row" data-tst-id="friends-found">
           <UserAvatar :name="person.displayName" :user-id="person.userId" :avatar-url="person.avatarUrl" />
           <span class="grow">
-            <span class="people__name">{{ person.displayName }}</span>
+            <RouterLink class="people__name" :to="{ name: 'person', params: { userId: person.userId } }">
+              {{ person.displayName }}
+            </RouterLink>
             <span v-if="person.city" class="small muted people__sub">{{ person.city }}</span>
           </span>
 
@@ -165,7 +167,9 @@ async function change(what: string, action: () => Promise<void>): Promise<void> 
         <ul class="card people">
           <li v-for="request in incoming" :key="request.requestId" class="people__row" data-tst-id="friend-request">
             <UserAvatar :name="request.displayName" :user-id="request.userId" :avatar-url="request.avatarUrl" />
-            <span class="grow people__name">{{ request.displayName }}</span>
+            <RouterLink class="grow people__name" :to="{ name: 'person', params: { userId: request.userId } }">
+              {{ request.displayName }}
+            </RouterLink>
             <span class="row">
               <button
                 class="btn btn--yes btn--small"
@@ -198,7 +202,9 @@ async function change(what: string, action: () => Promise<void>): Promise<void> 
           <li v-for="friend in friends" :key="friend.userId" class="people__row" data-tst-id="friend">
             <UserAvatar :name="friend.displayName" :user-id="friend.userId" :avatar-url="friend.avatarUrl" />
             <span class="grow">
-              <span class="people__name">{{ friend.displayName }}</span>
+              <RouterLink class="people__name" :to="{ name: 'person', params: { userId: friend.userId } }">
+                {{ friend.displayName }}
+              </RouterLink>
               <span class="small muted people__sub">
                 {{ friend.city ? friend.city + ' · ' : '' }}friends since {{ date(friend.friendsSince) }}
               </span>
@@ -241,7 +247,9 @@ async function change(what: string, action: () => Promise<void>): Promise<void> 
         <ul class="card people">
           <li v-for="request in outgoing" :key="request.requestId" class="people__row">
             <UserAvatar :name="request.displayName" :user-id="request.userId" :avatar-url="request.avatarUrl" />
-            <span class="grow people__name">{{ request.displayName }}</span>
+            <RouterLink class="grow people__name" :to="{ name: 'person', params: { userId: request.userId } }">
+              {{ request.displayName }}
+            </RouterLink>
             <span class="badge badge--wait">Sent {{ date(request.createdAt) }}</span>
           </li>
         </ul>
@@ -287,6 +295,7 @@ async function change(what: string, action: () => Promise<void>): Promise<void> 
 }
 
 .people__name {
+  color: inherit;
   display: block;
   font-weight: 600;
   overflow-wrap: anywhere;

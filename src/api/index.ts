@@ -14,6 +14,7 @@ import type {
   Invitation,
   MyProfile,
   Profile,
+  ProfileCard,
   PublicEvent,
   SavePreferenceRequest,
   UpdateProfileRequest,
@@ -32,11 +33,13 @@ export const api = {
   // ---------------------------------------------------------------- profile
   myProfile: () => get<MyProfile>('/profile/me'),
   updateMyProfile: (request: UpdateProfileRequest) => post<MyProfile>('/profile/me', request),
-  /** Replaces the profile picture with this file. The server accepts JPEG and PNG up to 2 MB. */
-  uploadAvatar: (file: File) => upload<MyProfile>('/profile/me/avatar', file),
-  removeAvatar: () => post<MyProfile>('/profile/me/avatar/remove'),
+  /** Adds a photo after the existing ones. The server accepts JPEG and PNG up to 6 MB. */
+  uploadPhoto: (file: File) => upload<MyProfile>('/profile/me/photo', file),
+  removePhoto: (photoId: number) => post<MyProfile>('/profile/me/photo/' + photoId + '/remove'),
+  /** Puts the photo first: it becomes the picture shown next to the name everywhere. */
+  makeMainPhoto: (photoId: number) => post<MyProfile>('/profile/me/photo/' + photoId + '/make-main'),
   profile: (userId: number) => get<Profile>('/profile/' + userId),
-  searchPeople: (text: string) => get<Profile[]>('/profile/search?text=' + encodeURIComponent(text)),
+  searchPeople: (text: string) => get<ProfileCard[]>('/profile/search?text=' + encodeURIComponent(text)),
 
   // ---------------------------------------------------------------- friends
   friends: () => get<Friend[]>('/friend/list'),

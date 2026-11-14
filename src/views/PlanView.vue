@@ -242,10 +242,10 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
           <li v-for="invitee in event.invitees" :key="invitee.invitationId" class="people__row" data-tst-id="invitee">
             <UserAvatar :name="invitee.displayName" :user-id="invitee.userId" />
             <span class="grow">
-              <span class="people__name">
+              <RouterLink class="people__name" :to="{ name: 'person', params: { userId: invitee.userId } }">
                 {{ invitee.displayName }}
                 <span v-if="invitee.userId === auth.state.userId" class="muted">(you)</span>
-              </span>
+              </RouterLink>
               <span
                 v-if="guestPreference(invitee) !== ''"
                 class="small muted people__sub"
@@ -371,6 +371,7 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 }
 
 .people__name {
+  color: inherit;
   display: block;
   font-weight: 600;
   overflow-wrap: anywhere;
