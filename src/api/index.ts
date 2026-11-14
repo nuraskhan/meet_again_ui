@@ -2,6 +2,7 @@
 
 import { get, post, upload } from './http'
 import type {
+  AppNotification,
   AuthResponse,
   Chat,
   ChatMember,
@@ -24,6 +25,9 @@ import type {
 
 /** How many events the feed loads at a time. A full page means there may be more. */
 export const FEED_PAGE = 20
+
+/** How many notifications are loaded at a time. A full page means there may be more. */
+export const NOTIFICATION_PAGE = 20
 
 export const api = {
   // ---------------------------------------------------------------- auth
@@ -102,4 +106,15 @@ export const api = {
     ),
   postChatMessage: (chatId: number, text: string) =>
     post<ChatMessage>('/chat/' + chatId + '/message', { text }),
+
+  // ---------------------------------------------------------------- notifications
+  /** Newest first; the next page is asked with the id of the last one got. */
+  notifications: (beforeId?: number) =>
+    get<AppNotification[]>(
+      '/notification/list?limit=' + NOTIFICATION_PAGE + (beforeId === undefined ? '' : '&beforeId=' + beforeId),
+    ),
+  unreadNotificationCount: () => get<{ count: number }>('/notification/unread-count'),
+  /** @returns how many are still unread */
+  markNotificationRead: (id: number) => post<{ count: number }>('/notification/' + id + '/read'),
+  markAllNotificationsRead: () => post<{ count: number }>('/notification/read-all'),
 }

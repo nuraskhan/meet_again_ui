@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // Friends: find people, answer requests, see who is already a friend.
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from '@/api'
-import type { Friend, FriendRequest, ProfileCard } from '@/api/types'
+import type { AppNotification, Friend, FriendRequest, ProfileCard } from '@/api/types'
+import { onSignal } from '@/stores/signal'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { date } from '@/lib/format'
 import { toastError, toastOk } from '@/stores/toast'
@@ -28,6 +29,14 @@ const askedIds = computed<Set<number>>(() => new Set(outgoing.value.map((request
 const askingMeIds = computed<Set<number>>(() => new Set(incoming.value.map((request) => request.userId)))
 
 onMounted(load)
+
+// A request came, or one of mine was accepted: show it without a reload.
+const stopListening: () => void = onSignal<AppNotification>('notification', (notification) => {
+  if (notification.kind === 'FRIEND_REQUEST' || notification.kind === 'FRIEND_ACCEPTED') {
+    void load()
+  }
+})
+onBeforeUnmount(stopListening)
 
 async function load(): Promise<void> {
   try {

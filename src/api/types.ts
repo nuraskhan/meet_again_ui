@@ -307,3 +307,39 @@ export interface FeedItem extends EventFacts {
   /** CREATOR, the current user's own answer, or NONE for someone not part of it yet. */
   myStanding: 'CREATOR' | 'NONE' | InvitationStatus
 }
+
+export type NotificationKind =
+  | 'FRIEND_REQUEST'
+  | 'FRIEND_ACCEPTED'
+  | 'EVENT_INVITATION'
+  | 'INVITATION_ACCEPTED'
+  | 'INVITATION_DECLINED'
+  | 'GUEST_JOINED'
+  | 'GUEST_LEFT'
+  | 'REMOVED_FROM_EVENT'
+  | 'EVENT_CANCELLED'
+
+/**
+ * Something that happened and concerns the logged-in person. (Not "Notification": that name is the
+ * browser's own.)
+ */
+export interface AppNotification {
+  id: number
+  kind: NotificationKind
+  /** The sentence to show, composed by the server. */
+  text: string
+  /** Who did it; null if that person is unknown. */
+  actorId: number | null
+  actorName: string | null
+  actorAvatarUrl: string | null
+  /** The plan it is about; null for what is not about a plan (friend requests). */
+  eventId: number | null
+  createdAt: string
+  read: boolean
+}
+
+/** What the signal "chat.message" carries. */
+export interface ChatMessageSignal {
+  chatId: number
+  message: ChatMessage
+}

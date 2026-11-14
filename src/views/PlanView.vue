@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // One plan: the invitation, who answered what, the way into its chat.
 
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
-import type { EventDto, Invitee } from '@/api/types'
+import type { AppNotification, EventDto, Invitee } from '@/api/types'
+import { onSignal } from '@/stores/signal'
 import EventSummary from '@/components/EventSummary.vue'
 import PreferenceForm from '@/components/PreferenceForm.vue'
 import SuggestedPlaces from '@/components/SuggestedPlaces.vue'
@@ -83,6 +84,22 @@ const inChat = computed<boolean>(() => isCreator.value || mine.value?.status !==
 
 onMounted(load)
 watch(() => props.eventId, load)
+
+// Someone answered, joined, left, or the plan was called off: read it again, quietly - without
+// the "Loading…" that a first load shows, and without a complaint if it fails.
+const stopListening: () => void = onSignal<AppNotification>('notification', async (notification) => {
+  if (notification.eventId !== props.eventId || event.value === null) {
+    return
+  }
+  try {
+    event.value = await api.event(props.eventId)
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.status === 404) {
+      missing.value = true
+    }
+  }
+})
+onBeforeUnmount(stopListening)
 
 async function load(): Promise<void> {
   loading.value = true

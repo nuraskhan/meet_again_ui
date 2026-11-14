@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Home of a logged-in user: invitations waiting for an answer, then every plan they are part of.
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { onSignal } from '@/stores/signal'
 import { api } from '@/api'
 import type { EventDto, Invitation } from '@/api/types'
 import EventSummary from '@/components/EventSummary.vue'
@@ -30,6 +31,10 @@ const upcoming = computed<EventDto[]>(() => plans.value.filter((event) => event.
 const closed = computed<EventDto[]>(() => plans.value.filter((event) => event.status !== 'ACTIVE'))
 
 onMounted(load)
+
+// An invitation, an answer, a cancellation: whatever it was, the lists here may have changed.
+const stopListening: () => void = onSignal('notification', () => void load())
+onBeforeUnmount(stopListening)
 
 async function load(): Promise<void> {
   try {

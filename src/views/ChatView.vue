@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// One chat. The server has no live delivery yet, so new messages are fetched every few seconds
-// while the page is open and visible.
+// One chat. A new message arrives by signal the moment it is written (see stores/signal.ts).
+// The newest page is also fetched now and then, and whenever the signal stream comes back after a
+// break: a signal can be lost, the message must not be.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
-import type { Chat, ChatMember, ChatMessage } from '@/api/types'
+import type { Chat, ChatMember, ChatMessage, ChatMessageSignal } from '@/api/types'
+import { onSignal, RECONNECTED } from '@/stores/signal'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { messageTime } from '@/lib/format'
 import { auth } from '@/stores/auth'
@@ -13,7 +15,8 @@ import { toastError } from '@/stores/toast'
 
 const props = defineProps<{ chatId: number }>()
 
-const POLL_EVERY_MS = 4000
+/** The safety net under the signals, not the delivery: so it is slow. */
+const POLL_EVERY_MS = 30000
 /** The size of a page the server returns by default. A full page means there may be older ones. */
 const PAGE_SIZE = 50
 
@@ -59,8 +62,18 @@ onMounted(async () => {
   }
 })
 
+const stopListening: (() => void)[] = [
+  onSignal<ChatMessageSignal>('chat.message', (signal) => {
+    if (signal.chatId === props.chatId && !loading.value && !missing.value) {
+      void addNew([signal.message])
+    }
+  }),
+  onSignal(RECONNECTED, () => void poll()),
+]
+
 onBeforeUnmount(() => {
   window.clearInterval(timer)
+  stopListening.forEach((stop) => stop())
 })
 
 /** Fetches the newest page and adds what is not shown yet. Silent: a failed poll is retried. */

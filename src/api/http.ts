@@ -55,6 +55,33 @@ export function serverFileUrl(path: string | null | undefined): string | null {
   return BASE_URL + path
 }
 
+/**
+ * Opens a request the server keeps open and writes into as things happen (the stream of signals),
+ * and gives its body to be read piece by piece.
+ *
+ * WHY fetch and not the browser's EventSource: EventSource cannot send the Authorization header,
+ * and the token must not travel in the address, where proxies and logs keep it.
+ *
+ * @param abort ends the stream from our side
+ */
+export async function openStream(path: string, abort: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+  const token: string | null = tokenProvider()
+  const headers: Record<string, string> = { Accept: 'text/event-stream' }
+  if (token !== null) {
+    headers['Authorization'] = 'Bearer ' + token
+  }
+
+  const response: Response = await fetch(BASE_URL + path, { headers, signal: abort, cache: 'no-store' })
+
+  if (response.status === 401 && token !== null) {
+    onUnauthorized()
+  }
+  if (!response.ok || response.body === null) {
+    throw new ApiError(response.status, '', 'The stream could not be opened (' + response.status + ').')
+  }
+  return response.body
+}
+
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {}
 

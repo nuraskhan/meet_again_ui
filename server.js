@@ -81,6 +81,11 @@ function forwardToBackend(request, response, backendPath) {
     response.end(JSON.stringify({ code: 'backend_unreachable', message: 'The server is not available. Try again in a minute.' }))
   })
 
+  // WHY: a request that stays open (the stream of signals) ends when the browser leaves, not when
+  // the backend answers. Without this the connection to the backend would stay open after the
+  // page is gone, one more for every reload.
+  response.on('close', () => outgoing.destroy())
+
   request.pipe(outgoing)
 }
 

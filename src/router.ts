@@ -70,6 +70,11 @@ export const router = createRouter({
           component: () => import('./views/ChatView.vue'),
           props: (route) => ({ chatId: Number(route.params.chatId) }),
         },
+        {
+          path: 'notifications',
+          name: 'notifications',
+          component: () => import('./views/NotificationsView.vue'),
+        },
         { path: 'profile', name: 'profile', component: () => import('./views/ProfileView.vue') },
         {
           // A person as others see them.

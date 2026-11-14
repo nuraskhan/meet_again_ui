@@ -5,8 +5,14 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue'
 import { useRoute } from 'vue-router'
 import { auth } from '@/stores/auth'
+import { notifications } from '@/stores/notifications'
 
 const route = useRoute()
+
+/** The number on the bell: "9+" beyond nine, so the badge stays a small circle. */
+function unreadLabel(): string {
+  return notifications.state.unread > 9 ? '9+' : String(notifications.state.unread)
+}
 
 const NAV: { name: string; label: string; icon: string }[] = [
   { name: 'feed', label: 'Feed', icon: '📣' },
@@ -35,6 +41,28 @@ const NAV: { name: string; label: string; icon: string }[] = [
             <span class="shell__label">{{ item.label }}</span>
           </RouterLink>
         </nav>
+
+        <RouterLink
+          class="shell__bell"
+          active-class="shell__bell--active"
+          :to="{ name: 'notifications' }"
+          :aria-label="
+            notifications.state.unread > 0
+              ? 'Notifications, ' + notifications.state.unread + ' unread'
+              : 'Notifications'
+          "
+          data-tst-id="nav-notifications"
+        >
+          <span aria-hidden="true">🔔</span>
+          <span
+            v-if="notifications.state.unread > 0"
+            class="shell__unread"
+            aria-hidden="true"
+            data-tst-id="nav-notifications-unread"
+          >
+            {{ unreadLabel() }}
+          </span>
+        </RouterLink>
 
         <RouterLink
           class="shell__me"
@@ -119,6 +147,45 @@ const NAV: { name: string; label: string; icon: string }[] = [
 .shell__link--active:hover {
   background: var(--c-accent-soft);
   color: var(--c-accent);
+}
+
+.shell__bell {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+
+.shell__bell:hover {
+  background: var(--c-surface-soft);
+}
+
+.shell__bell--active,
+.shell__bell--active:hover {
+  background: var(--c-accent-soft);
+}
+
+.shell__unread {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--c-page);
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  box-sizing: content-box;
 }
 
 .shell__me {
