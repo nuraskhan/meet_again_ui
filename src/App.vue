@@ -1,47 +1,52 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+import { toasts } from '@/stores/toast'
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
+  <RouterView />
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-    </div>
-  </header>
-
-  <main>
-    <TheWelcome />
-  </main>
+  <!-- Short messages: what was done, or what went wrong. -->
+  <div class="toasts" aria-live="polite">
+    <TransitionGroup name="fade">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="toasts__item"
+        :class="'toasts__item--' + toast.kind"
+        data-tst-id="toast"
+      >
+        {{ toast.text }}
+      </div>
+    </TransitionGroup>
+  </div>
 </template>
 
 <style scoped>
-header {
-  line-height: 1.5;
+.toasts {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 20px;
+  z-index: 50;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none;
 }
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
+.toasts__item {
+  max-width: 480px;
+  padding: 12px 18px;
+  border-radius: var(--radius-m);
+  background: var(--c-ink);
+  color: var(--c-page);
+  box-shadow: var(--shadow-pop);
+  font-size: 0.95rem;
 }
 
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
+.toasts__item--error {
+  background: var(--c-danger);
+  color: var(--c-on-accent);
 }
 </style>
