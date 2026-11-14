@@ -35,6 +35,13 @@ export const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      // An invitation opened by its link: for everyone, logged in or not.
+      path: '/i/:shareToken',
+      name: 'invite',
+      component: () => import('./views/InviteView.vue'),
+      props: true,
+    },
+    {
       // Everything inside shares the top bar with the navigation.
       path: '/',
       component: () => import('./views/AppShell.vue'),

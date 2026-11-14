@@ -69,9 +69,18 @@ export function dateTime(iso: string): string {
   return dateTimeFormat.format(new Date(iso))
 }
 
-/** When an event starts, or the words for "not decided". */
-export function startsAt(iso: string | null): string {
-  return iso === null ? 'Time to be agreed' : dateTime(iso)
+/** The proposed dates in one line: "Time to be agreed", "Sat, 19 Nov, 18:00", or the first one "+2 more". */
+export function proposedTimesSummary(times: string[]): string {
+  const first: string | undefined = times[0]
+  if (first === undefined) {
+    return 'Time to be agreed'
+  }
+  return times.length === 1 ? dateTime(first) : dateTime(first) + ' +' + (times.length - 1) + ' more'
+}
+
+/** The address people open to see an invitation. */
+export function inviteLink(shareToken: string): string {
+  return window.location.origin + '/i/' + encodeURIComponent(shareToken)
 }
 
 export function date(iso: string): string {

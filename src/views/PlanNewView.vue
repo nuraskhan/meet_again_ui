@@ -27,11 +27,16 @@ const form = reactive({
   distanceMaxKm: 0,
   priceMin: 0,
   priceMax: 0,
-  startsAtLocal: '', // the value of <input type="datetime-local">
+  /** Proposed dates as values of <input type="datetime-local">; an empty one is ignored. */
+  times: [''] as string[],
   inviteeIds: [] as number[],
 })
 
-const canSend = computed<boolean>(() => chosen.value !== null && form.inviteeIds.length > 0 && !busy.value)
+/** The server accepts at most this many proposed dates. */
+const MAX_TIMES = 10
+
+// Nobody has to be ticked: the plan can be shared by its link afterwards.
+const canSend = computed<boolean>(() => chosen.value !== null && !busy.value)
 
 onMounted(async () => {
   try {
@@ -89,11 +94,19 @@ async function send(): Promise<void> {
       distanceMaxKm: form.distanceMaxKm,
       priceMin: form.priceMin,
       priceMax: form.priceMax,
-      startsAt: localInputToIso(form.startsAtLocal),
+      proposedTimes: form.times
+        .map(localInputToIso)
+        .filter((iso): iso is string => iso !== null),
       inviteeIds: form.inviteeIds,
     })
 
-    toastOk(form.inviteeIds.length === 1 ? 'Invitation sent' : 'Invitations sent')
+    toastOk(
+      form.inviteeIds.length === 0
+        ? 'Created. Now share the link.'
+        : form.inviteeIds.length === 1
+          ? 'Invitation sent'
+          : 'Invitations sent',
+    )
     await router.replace({ name: 'plan', params: { eventId: event.id } })
   } catch (caught) {
     error.value = errorText(caught)
@@ -111,13 +124,6 @@ async function send(): Promise<void> {
     </div>
 
     <p v-if="loading" class="muted">Loading…</p>
-
-    <!-- Nobody to invite yet: the form would be a dead end. -->
-    <div v-else-if="friends.length === 0" class="empty" data-tst-id="plan-new-no-friends">
-      <p class="new__empty-title">First, add a friend</p>
-      <p>Invitations go to your friends, and you have none here yet.</p>
-      <RouterLink class="btn new__empty-button" :to="{ name: 'friends' }">Find friends</RouterLink>
-    </div>
 
     <form v-else class="stack new" data-tst-id="plan-new-form" @submit.prevent="send">
       <!-- ---------------------------------------------------------- 1. what -->
@@ -159,16 +165,44 @@ async function send(): Promise<void> {
             />
           </label>
 
-          <label class="field">
-            <span class="field__label">When</span>
-            <input
-              v-model="form.startsAtLocal"
-              class="input"
-              type="datetime-local"
-              data-tst-id="plan-new-when"
-            />
-            <span class="field__hint">Leave empty to agree on the time in the chat.</span>
-          </label>
+          <fieldset class="new__range">
+            <legend class="field__label">When</legend>
+
+            <div v-for="(_, index) in form.times" :key="index" class="new__time">
+              <input
+                v-model="form.times[index]"
+                class="input"
+                type="datetime-local"
+                :aria-label="'Proposed date ' + (index + 1)"
+                :data-tst-id="'plan-new-when-' + index"
+              />
+              <button
+                v-if="form.times.length > 1"
+                class="new__time-remove"
+                type="button"
+                :aria-label="'Remove proposed date ' + (index + 1)"
+                @click="form.times.splice(index, 1)"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <button
+                v-if="form.times.length < MAX_TIMES"
+                class="btn btn--ghost btn--small"
+                type="button"
+                data-tst-id="plan-new-when-add"
+                @click="form.times.push('')"
+              >
+                + Offer another date
+              </button>
+            </div>
+
+            <span class="field__hint">
+              Offer one date or several to choose from. Leave empty to agree on the time in the chat.
+            </span>
+          </fieldset>
 
           <div class="new__pair">
             <fieldset class="new__range">
@@ -244,7 +278,17 @@ async function send(): Promise<void> {
         <section class="card">
           <h2 class="section__title new__card-title">3. Who is invited?</h2>
 
-          <ul class="new__friends">
+          <p class="small muted new__who-hint" data-tst-id="plan-new-link-hint">
+            <template v-if="friends.length === 0">
+              You have no friends here yet - that is fine. After creating the plan you get a link to
+              send to anyone.
+            </template>
+            <template v-else>
+              Tick friends, or tick nobody and send the link you get after creating the plan.
+            </template>
+          </p>
+
+          <ul v-if="friends.length > 0" class="new__friends">
             <li v-for="friend in friends" :key="friend.userId">
               <label class="friend" :class="{ 'friend--picked': form.inviteeIds.includes(friend.userId) }">
                 <input
@@ -270,15 +314,15 @@ async function send(): Promise<void> {
           <p class="small muted">
             {{
               form.inviteeIds.length === 0
-                ? 'Tick at least one friend.'
+                ? 'You will get a link to share. A chat is created for everyone who joins.'
                 : 'A group chat with ' +
                   form.inviteeIds.length +
                   (form.inviteeIds.length === 1 ? ' friend' : ' friends') +
-                  ' will be created.'
+                  ' will be created. You also get a link for others.'
             }}
           </p>
           <button class="btn btn--big" type="submit" :disabled="!canSend" data-tst-id="plan-new-send">
-            {{ busy ? 'Sending…' : 'Send invitation' }}
+            {{ busy ? 'Creating…' : form.inviteeIds.length === 0 ? 'Create and get the link' : 'Send invitation' }}
           </button>
         </div>
       </template>
@@ -362,6 +406,34 @@ async function send(): Promise<void> {
   gap: 8px;
 }
 
+.new__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new__time-remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--c-ink-faint);
+  cursor: pointer;
+}
+
+.new__time-remove:hover {
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
+}
+
+.new__who-hint {
+  margin: 4px 0 10px;
+}
+
 .new__friends {
   display: grid;
   gap: 6px;
@@ -412,17 +484,6 @@ async function send(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.new__empty-title {
-  margin-bottom: 4px;
-  color: var(--c-ink);
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.new__empty-button {
-  margin-top: 16px;
 }
 
 @media (max-width: 560px) {

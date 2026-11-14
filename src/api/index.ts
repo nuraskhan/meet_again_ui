@@ -14,6 +14,7 @@ import type {
   Invitation,
   MyProfile,
   Profile,
+  PublicEvent,
   UpdateProfileRequest,
 } from './types'
 
@@ -44,6 +45,10 @@ export const api = {
   events: () => get<EventDto[]>('/event/list'),
   event: (eventId: number) => get<EventDto>('/event/' + eventId),
   cancelEvent: (eventId: number) => post<void>('/event/' + eventId + '/cancel'),
+  /** The invitation a link leads to. Works without being logged in. */
+  publicEvent: (shareToken: string) => get<PublicEvent>('/public/event/' + encodeURIComponent(shareToken)),
+  /** Accepting by the link. Needs a logged-in user. */
+  joinEvent: (shareToken: string) => post<EventDto>('/event/join/' + encodeURIComponent(shareToken)),
 
   // ---------------------------------------------------------------- invitations
   incomingInvitations: () => get<Invitation[]>('/invitation/incoming'),

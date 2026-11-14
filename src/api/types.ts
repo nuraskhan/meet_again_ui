@@ -76,8 +76,8 @@ export interface Invitee {
   respondedAt: string | null
 }
 
-export interface EventDto {
-  id: number
+/** What an invitation says. Shared by the event a participant sees and the one opened by a link. */
+export interface EventFacts {
   eventType: EventTypeCode
   title: string
   description: string | null
@@ -85,13 +85,28 @@ export interface EventDto {
   distanceMaxKm: number
   priceMin: number
   priceMax: number
-  startsAt: string | null
+  /** The dates the creator offers, earliest first. Empty = to be agreed in the chat. */
+  proposedTimes: string[]
   status: EventStatus
+  creatorName: string
+}
+
+/** An event as its participants see it. */
+export interface EventDto extends EventFacts {
+  id: number
   createdAt: string
   chatId: number
+  /** The secret part of the link to the event. Only the creator gets it. */
+  shareToken: string | null
   creatorId: number
-  creatorName: string
+  /** Everyone invited by name or joined by the link. */
   invitees: Invitee[]
+}
+
+/** An event as anyone with its link sees it, logged in or not: no ids, no guest names. */
+export interface PublicEvent extends EventFacts {
+  invitedCount: number
+  goingCount: number
 }
 
 export interface CreateEventRequest {
@@ -102,7 +117,8 @@ export interface CreateEventRequest {
   distanceMaxKm: number
   priceMin: number
   priceMax: number
-  startsAt: string | null
+  proposedTimes: string[]
+  /** May be empty: people then come by the link. */
   inviteeIds: number[]
 }
 

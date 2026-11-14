@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// The heart of an invitation: what, when, how far, how much. Used on cards and on the plan page.
+// The heart of an invitation: what, when, how far, how much. Used on cards, on the plan page and
+// on the page a link opens.
 
-import type { EventDto } from '@/api/types'
-import { distanceRange, EVENT_TYPE_LOOK, priceRange, startsAt } from '@/lib/format'
+import type { EventFacts } from '@/api/types'
+import { distanceRange, EVENT_TYPE_LOOK, priceRange, proposedTimesSummary } from '@/lib/format'
 
-defineProps<{ event: EventDto }>()
+defineProps<{ event: EventFacts }>()
 </script>
 
 <template>
@@ -16,7 +17,9 @@ defineProps<{ event: EventDto }>()
       <h3 class="summary__title">{{ event.title }}</h3>
 
       <ul class="summary__facts">
-        <li><span aria-hidden="true">🗓</span> {{ startsAt(event.startsAt) }}</li>
+        <li data-tst-id="summary-when">
+          <span aria-hidden="true">🗓</span> {{ proposedTimesSummary(event.proposedTimes) }}
+        </li>
         <li><span aria-hidden="true">📍</span> {{ distanceRange(event.distanceMinKm, event.distanceMaxKm) }}</li>
         <li><span aria-hidden="true">💸</span> {{ priceRange(event.priceMin, event.priceMax) }}</li>
       </ul>

@@ -6,7 +6,9 @@ import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { EventDto, Invitee } from '@/api/types'
 import EventSummary from '@/components/EventSummary.vue'
+import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
+import { inviteLink } from '@/lib/format'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
@@ -26,6 +28,27 @@ const active = computed<boolean>(() => event.value?.status === 'ACTIVE')
 const mine = computed<Invitee | undefined>(() =>
   event.value?.invitees.find((invitee) => invitee.userId === auth.state.userId),
 )
+
+/** The address to send to people; empty for everyone but the creator. */
+const link = computed<string>(() => {
+  const token: string | null | undefined = event.value?.shareToken
+  return token ? inviteLink(token) : ''
+})
+
+const copied = ref<boolean>(false)
+
+async function copyLink(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(link.value)
+    copied.value = true
+    window.setTimeout(() => {
+      copied.value = false
+    }, 2000)
+  } catch {
+    // No clipboard access (an insecure page, or the permission is denied): the field is selectable.
+    toastOk('Select the link and copy it by hand.')
+  }
+}
 
 /** Someone who declined is no longer in the chat. */
 const inChat = computed<boolean>(() => isCreator.value || mine.value?.status !== 'DECLINED')
@@ -109,6 +132,8 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 
         <EventSummary :event="event" />
 
+        <ProposedTimes :times="event.proposedTimes" />
+
         <p v-if="event.description" class="plan__note">{{ event.description }}</p>
 
         <p class="small muted plan__by">
@@ -138,10 +163,39 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
         </div>
       </article>
 
+      <!-- The link: only the creator gets it from the server. -->
+      <section v-if="link !== '' && active" class="section" data-tst-id="plan-share">
+        <h2 class="section__title">Invite by link</h2>
+
+        <div class="card share">
+          <p class="small muted">
+            Anyone with this link can see the invitation. To accept it they log in or register.
+          </p>
+          <div class="share__row">
+            <input
+              class="input share__link"
+              type="text"
+              readonly
+              :value="link"
+              aria-label="Link to this invitation"
+              data-tst-id="plan-share-link"
+              @focus="($event.target as HTMLInputElement).select()"
+            />
+            <button class="btn" type="button" data-tst-id="plan-share-copy" @click="copyLink">
+              {{ copied ? 'Copied ✓' : 'Copy link' }}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="section">
         <h2 class="section__title">Who is invited</h2>
 
-        <ul class="card people">
+        <p v-if="event.invitees.length === 0" class="empty" data-tst-id="plan-no-guests">
+          Nobody yet. Send the link above - whoever accepts appears here.
+        </p>
+
+        <ul v-else class="card people">
           <li v-for="invitee in event.invitees" :key="invitee.invitationId" class="people__row" data-tst-id="invitee">
             <UserAvatar :name="invitee.displayName" :user-id="invitee.userId" />
             <span class="grow people__name">
@@ -213,6 +267,28 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 
 .plan__actions {
   margin-top: 16px;
+}
+
+.share {
+  display: grid;
+  gap: 12px;
+}
+
+.share__row {
+  display: flex;
+  gap: 10px;
+}
+
+.share__link {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+  .share__row {
+    flex-direction: column;
+  }
 }
 
 .people {
