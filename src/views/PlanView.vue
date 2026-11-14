@@ -6,6 +6,7 @@ import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { EventDto, Invitee } from '@/api/types'
 import EventSummary from '@/components/EventSummary.vue'
+import PreferenceForm from '@/components/PreferenceForm.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { inviteLink } from '@/lib/format'
@@ -28,6 +29,25 @@ const active = computed<boolean>(() => event.value?.status === 'ACTIVE')
 const mine = computed<Invitee | undefined>(() =>
   event.value?.invitees.find((invitee) => invitee.userId === auth.state.userId),
 )
+
+/** A guest who has not declined says where they are and how far they travel. */
+const canSetPreference = computed<boolean>(
+  () => active.value && mine.value !== undefined && mine.value.status !== 'DECLINED',
+)
+
+/** What the others may know about a guest's preference: "Brooklyn · up to 5 mi". */
+function guestPreference(invitee: Invitee): string {
+  const parts: string[] = []
+  if (invitee.locationText !== null) {
+    parts.push(invitee.locationText)
+  } else if (invitee.locationShared) {
+    parts.push('location shared')
+  }
+  if (invitee.travelRadiusMi !== null) {
+    parts.push('up to ' + invitee.travelRadiusMi + ' mi')
+  }
+  return parts.join(' · ')
+}
 
 /** The address to send to people; empty for everyone but the creator. */
 const link = computed<string>(() => {
@@ -163,6 +183,19 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
         </div>
       </article>
 
+      <!-- A guest says where they are and how far they travel. Not for the creator: their wish is
+           the distance of the plan itself. -->
+      <section v-if="canSetPreference" class="section" data-tst-id="plan-preference">
+        <h2 class="section__title">Your location and travel distance</h2>
+
+        <div class="card" :class="{ 'plan__todo': event.myPreference === null }">
+          <p v-if="event.myPreference === null" class="plan__todo-note" data-tst-id="plan-preference-todo">
+            Tell the others where you are coming from and how far you can go.
+          </p>
+          <PreferenceForm :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
+        </div>
+      </section>
+
       <!-- The link: only the creator gets it from the server. -->
       <section v-if="link !== '' && active" class="section" data-tst-id="plan-share">
         <h2 class="section__title">Invite by link</h2>
@@ -198,9 +231,18 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
         <ul v-else class="card people">
           <li v-for="invitee in event.invitees" :key="invitee.invitationId" class="people__row" data-tst-id="invitee">
             <UserAvatar :name="invitee.displayName" :user-id="invitee.userId" />
-            <span class="grow people__name">
-              {{ invitee.displayName }}
-              <span v-if="invitee.userId === auth.state.userId" class="muted">(you)</span>
+            <span class="grow">
+              <span class="people__name">
+                {{ invitee.displayName }}
+                <span v-if="invitee.userId === auth.state.userId" class="muted">(you)</span>
+              </span>
+              <span
+                v-if="guestPreference(invitee) !== ''"
+                class="small muted people__sub"
+                data-tst-id="invitee-preference"
+              >
+                {{ guestPreference(invitee) }}
+              </span>
             </span>
             <span class="badge" :class="STATUS_LOOK[invitee.status].kind">
               {{ STATUS_LOOK[invitee.status].text }}
@@ -310,8 +352,28 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 }
 
 .people__name {
+  display: block;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.people__sub {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* The one thing on the page still waiting for the guest. */
+.plan__todo {
+  border-color: color-mix(in srgb, var(--c-accent) 55%, var(--c-line));
+}
+
+.plan__todo-note {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-s);
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+  font-weight: 600;
 }
 
 .plan__confirm {

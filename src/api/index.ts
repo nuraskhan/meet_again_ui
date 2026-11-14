@@ -15,6 +15,7 @@ import type {
   MyProfile,
   Profile,
   PublicEvent,
+  SavePreferenceRequest,
   UpdateProfileRequest,
 } from './types'
 
@@ -45,6 +46,9 @@ export const api = {
   events: () => get<EventDto[]>('/event/list'),
   event: (eventId: number) => get<EventDto>('/event/' + eventId),
   cancelEvent: (eventId: number) => post<void>('/event/' + eventId + '/cancel'),
+  /** A guest says where they are and how far they travel, for this event. */
+  savePreference: (eventId: number, request: SavePreferenceRequest) =>
+    post<EventDto>('/event/' + eventId + '/preference', request),
   /** The invitation a link leads to. Works without being logged in. */
   publicEvent: (shareToken: string) => get<PublicEvent>('/public/event/' + encodeURIComponent(shareToken)),
   /** Accepting by the link. Needs a logged-in user. */

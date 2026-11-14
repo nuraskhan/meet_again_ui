@@ -2,11 +2,14 @@
 // Home of a logged-in user: invitations waiting for an answer, then every plan they are part of.
 
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import type { EventDto, Invitation } from '@/api/types'
 import EventSummary from '@/components/EventSummary.vue'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
+
+const router = useRouter()
 
 const invitations = ref<Invitation[]>([])
 const events = ref<EventDto[]>([])
@@ -39,7 +42,10 @@ async function answer(invitation: Invitation, accept: boolean): Promise<void> {
   try {
     if (accept) {
       await api.acceptInvitation(invitation.invitationId)
-      toastOk('You are in! The chat is waiting.')
+      toastOk('You are in! Now say where you are coming from.')
+      // The plan page asks for the guest's location and travel distance.
+      await router.push({ name: 'plan', params: { eventId: invitation.event.id } })
+      return
     } else {
       await api.declineInvitation(invitation.invitationId)
       toastOk('Declined. Maybe next time.')

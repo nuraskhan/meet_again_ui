@@ -20,7 +20,7 @@ defineProps<{ event: EventFacts }>()
         <li data-tst-id="summary-when">
           <span aria-hidden="true">🗓</span> {{ proposedTimesSummary(event.proposedTimes) }}
         </li>
-        <li><span aria-hidden="true">📍</span> {{ distanceRange(event.distanceMinKm, event.distanceMaxKm) }}</li>
+        <li><span aria-hidden="true">📍</span> {{ distanceRange(event.distanceMinMi, event.distanceMaxMi) }}</li>
         <li><span aria-hidden="true">💸</span> {{ priceRange(event.priceMin, event.priceMax) }}</li>
       </ul>
     </div>

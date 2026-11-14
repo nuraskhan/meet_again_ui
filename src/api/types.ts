@@ -59,8 +59,8 @@ export type EventTypeCode =
 export interface EventTypeInfo {
   eventType: EventTypeCode
   defaultTitle: string
-  defaultDistanceMinKm: number
-  defaultDistanceMaxKm: number
+  defaultDistanceMinMi: number
+  defaultDistanceMaxMi: number
   defaultPriceMin: number
   defaultPriceMax: number
 }
@@ -74,6 +74,28 @@ export interface Invitee {
   displayName: string
   status: InvitationStatus
   respondedAt: string | null
+  /** The farthest the guest is ready to go, miles. Null = not said yet. */
+  travelRadiusMi: number | null
+  /** The place as the guest typed it. Null if they shared coordinates only, or said nothing. */
+  locationText: string | null
+  /** The guest shared the location of their device. The coordinates themselves are never sent. */
+  locationShared: boolean
+}
+
+/** The current user's own preference for an event, coordinates included. */
+export interface Preference {
+  latitude: number | null
+  longitude: number | null
+  locationText: string | null
+  travelRadiusMi: number
+}
+
+/** Coordinates (both together), a typed place, or both - at least one. */
+export interface SavePreferenceRequest {
+  latitude: number | null
+  longitude: number | null
+  locationText: string | null
+  travelRadiusMi: number
 }
 
 /** What an invitation says. Shared by the event a participant sees and the one opened by a link. */
@@ -81,8 +103,8 @@ export interface EventFacts {
   eventType: EventTypeCode
   title: string
   description: string | null
-  distanceMinKm: number
-  distanceMaxKm: number
+  distanceMinMi: number
+  distanceMaxMi: number
   priceMin: number
   priceMax: number
   /** The dates the creator offers, earliest first. Empty = to be agreed in the chat. */
@@ -101,6 +123,8 @@ export interface EventDto extends EventFacts {
   creatorId: number
   /** Everyone invited by name or joined by the link. */
   invitees: Invitee[]
+  /** What the current user said about themselves for this event; null until they say it. */
+  myPreference: Preference | null
 }
 
 /** An event as anyone with its link sees it, logged in or not: no ids, no guest names. */
@@ -113,8 +137,8 @@ export interface CreateEventRequest {
   eventType: EventTypeCode
   title: string
   description: string | null
-  distanceMinKm: number
-  distanceMaxKm: number
+  distanceMinMi: number
+  distanceMaxMi: number
   priceMin: number
   priceMax: number
   proposedTimes: string[]

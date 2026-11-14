@@ -39,15 +39,15 @@ export function priceRange(min: number, max: number): string {
   return money(min) + ' – ' + money(max) + ' ' + CURRENCY
 }
 
-/** "within 5 km", "5 – 10 km". */
-export function distanceRange(minKm: number, maxKm: number): string {
-  if (minKm === 0) {
-    return 'within ' + maxKm + ' km'
+/** "within 5 mi", "5 – 10 mi". Distances are in miles everywhere. */
+export function distanceRange(minMi: number, maxMi: number): string {
+  if (minMi === 0) {
+    return 'within ' + maxMi + ' mi'
   }
-  if (minKm === maxKm) {
-    return minKm + ' km away'
+  if (minMi === maxMi) {
+    return minMi + ' mi away'
   }
-  return minKm + ' – ' + maxKm + ' km'
+  return minMi + ' – ' + maxMi + ' mi'
 }
 
 // The interface is in English, so dates are too - whatever the language of the browser.

@@ -76,7 +76,7 @@ const STEPS: { title: string; text: string }[] = [
             </div>
             <ul class="invite__facts">
               <li>🗓 Sat, 18:00</li>
-              <li>📍 within 15 km</li>
+              <li>📍 within 10 mi</li>
               <li>💸 5 000 – 15 000 ₸</li>
             </ul>
             <div class="invite__people">

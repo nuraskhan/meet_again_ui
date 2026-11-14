@@ -23,8 +23,8 @@ const chosen = ref<EventTypeCode | null>(null)
 const form = reactive({
   title: '',
   description: '',
-  distanceMinKm: 0,
-  distanceMaxKm: 0,
+  distanceMinMi: 0,
+  distanceMaxMi: 0,
   priceMin: 0,
   priceMax: 0,
   /** Proposed dates as values of <input type="datetime-local">; an empty one is ignored. */
@@ -54,8 +54,8 @@ onMounted(async () => {
 function choose(type: EventTypeInfo): void {
   chosen.value = type.eventType
   form.title = type.defaultTitle
-  form.distanceMinKm = type.defaultDistanceMinKm
-  form.distanceMaxKm = type.defaultDistanceMaxKm
+  form.distanceMinMi = type.defaultDistanceMinMi
+  form.distanceMaxMi = type.defaultDistanceMaxMi
   form.priceMin = type.defaultPriceMin
   form.priceMax = type.defaultPriceMax
   error.value = ''
@@ -74,7 +74,7 @@ async function send(): Promise<void> {
   if (chosen.value === null) {
     return
   }
-  if (form.distanceMinKm > form.distanceMaxKm) {
+  if (form.distanceMinMi > form.distanceMaxMi) {
     error.value = 'The shortest distance is greater than the longest.'
     return
   }
@@ -90,8 +90,8 @@ async function send(): Promise<void> {
       eventType: chosen.value,
       title: form.title,
       description: form.description.trim() === '' ? null : form.description.trim(),
-      distanceMinKm: form.distanceMinKm,
-      distanceMaxKm: form.distanceMaxKm,
+      distanceMinMi: form.distanceMinMi,
+      distanceMaxMi: form.distanceMaxMi,
       priceMin: form.priceMin,
       priceMax: form.priceMax,
       proposedTimes: form.times
@@ -206,31 +206,31 @@ async function send(): Promise<void> {
 
           <div class="new__pair">
             <fieldset class="new__range">
-              <legend class="field__label">Distance from you, km</legend>
+              <legend class="field__label">Distance from you, miles</legend>
               <div class="new__range-inputs">
                 <input
-                  v-model.number="form.distanceMinKm"
+                  v-model.number="form.distanceMinMi"
                   class="input"
                   type="number"
                   min="0"
                   max="1000"
                   required
-                  aria-label="Shortest distance, km"
+                  aria-label="Shortest distance, miles"
                   data-tst-id="plan-new-distance-min"
                 />
                 <span class="muted">to</span>
                 <input
-                  v-model.number="form.distanceMaxKm"
+                  v-model.number="form.distanceMaxMi"
                   class="input"
                   type="number"
                   min="0"
                   max="1000"
                   required
-                  aria-label="Longest distance, km"
+                  aria-label="Longest distance, miles"
                   data-tst-id="plan-new-distance-max"
                 />
               </div>
-              <span class="field__hint">{{ distanceRange(form.distanceMinKm, form.distanceMaxKm) }}</span>
+              <span class="field__hint">{{ distanceRange(form.distanceMinMi, form.distanceMaxMi) }}</span>
             </fieldset>
 
             <fieldset class="new__range">
