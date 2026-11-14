@@ -4,25 +4,32 @@
 // This is also the layout of the chat pages: the list at the left and the open chat (the nested
 // route "chat", views/ChatView.vue) at the right. On a phone there is room for one of them only:
 // the list on "chats", the chat on "chat". The list stays loaded while moving between chats.
+//
+// A row shows the newest message of its chat, when it was written, and how many messages are new.
+// The list itself lives in stores/chats.ts, which keeps it current as messages arrive.
 
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { MessageCircle } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
-import { api } from '@/api'
 import type { Chat } from '@/api/types'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
+import { auth } from '@/stores/auth'
+import { chats as chatStore } from '@/stores/chats'
 import { toastError } from '@/stores/toast'
 
 const route = useRoute()
 
-const chats = ref<Chat[]>([])
-const loading = ref<boolean>(true)
+const chats = computed<Chat[]>(() => chatStore.state.items)
+const loading = computed<boolean>(() => !chatStore.state.loaded)
 
 /** The chat open at the right; null on the list alone. */
 const openChatId = computed<number | null>(() => (route.name === 'chat' ? Number(route.params.chatId) : null))
 
 // The interface is in English, so dates are too - whatever the language of the browser.
 const dayFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+const timeFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
+const shortDayFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
+const yearFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
 onMounted(load)
 
@@ -36,12 +43,44 @@ watch(openChatId, (chatId) => {
 
 async function load(): Promise<void> {
   try {
-    chats.value = await api.chats()
+    await chatStore.load()
   } catch (caught) {
     toastError(caught)
-  } finally {
-    loading.value = false
   }
+}
+
+/**
+ * When the newest message was written, as short as it can be said: the time today, "Yesterday",
+ * the day this year ("17 Nov"), the full date before that. In the time zone of the browser.
+ */
+function when(iso: string): string {
+  const moment = new Date(iso)
+  const now = new Date()
+  const startOfDay = (date: Date): number => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const daysAgo: number = Math.round((startOfDay(now) - startOfDay(moment)) / 86400000)
+  if (daysAgo <= 0) {
+    return timeFormat.format(moment)
+  }
+  if (daysAgo === 1) {
+    return 'Yesterday'
+  }
+  return moment.getFullYear() === now.getFullYear() ? shortDayFormat.format(moment) : yearFormat.format(moment)
+}
+
+/** Who wrote the newest message: "You", or the first name - the row is narrow. */
+function author(chat: Chat): string {
+  if (chat.lastMessage === null) {
+    return ''
+  }
+  if (chat.lastMessage.authorId === auth.state.userId) {
+    return 'You'
+  }
+  return chat.lastMessage.authorName.split(' ')[0] ?? chat.lastMessage.authorName
+}
+
+/** The number in the pill: "99+" beyond that, so the pill stays small. */
+function unreadLabel(count: number): string {
+  return count > 99 ? '99+' : String(count)
 }
 
 /** "Tue, 17 Nov". */
@@ -79,10 +118,41 @@ function day(iso: string): string {
               <MessageCircle v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
             </span>
             <span class="hg-row__text chats__text">
-              <span class="hg-row__title">{{ chat.title }}</span>
-              <span class="hg-row__sub">
-                {{ chat.memberCount }} {{ chat.memberCount === 1 ? 'member' : 'members' }} · started
-                {{ day(chat.createdAt) }}
+              <span class="chats__line">
+                <span class="hg-row__title app-grow" :class="{ 'chats__name--unread': chat.unreadCount > 0 }">
+                  {{ chat.title }}
+                </span>
+                <time
+                  v-if="chat.lastMessage !== null"
+                  class="hg-row__time"
+                  :class="{ 'chats__time--unread': chat.unreadCount > 0 }"
+                  :datetime="chat.lastMessage.createdAt"
+                  data-tst-id="chat-row-time"
+                >
+                  {{ when(chat.lastMessage.createdAt) }}
+                </time>
+              </span>
+              <span class="chats__line">
+                <span
+                  v-if="chat.lastMessage !== null"
+                  class="hg-row__sub app-grow"
+                  :class="{ 'chats__last--unread': chat.unreadCount > 0 }"
+                  data-tst-id="chat-row-last"
+                >
+                  <span class="chats__author">{{ author(chat) }}:</span> {{ chat.lastMessage.text }}
+                </span>
+                <span v-else class="hg-row__sub app-grow">
+                  No messages yet · {{ chat.memberCount }} {{ chat.memberCount === 1 ? 'member' : 'members' }} ·
+                  started {{ day(chat.createdAt) }}
+                </span>
+                <span
+                  v-if="chat.unreadCount > 0"
+                  class="hg-count"
+                  :aria-label="chat.unreadCount + ' new'"
+                  data-tst-id="chat-row-unread"
+                >
+                  {{ unreadLabel(chat.unreadCount) }}
+                </span>
               </span>
             </span>
           </RouterLink>
@@ -164,6 +234,33 @@ function day(iso: string): string {
 /* Rows here are separate rounded pieces, so no line between them. */
 .chats__text {
   border-bottom: 0;
+}
+
+/* A row has two lines: the name with the time, the newest message with the count of new ones. */
+.chats__line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.chats__author {
+  color: var(--c-ink);
+}
+
+/* A chat with something new stands out by weight and by the accent on its time - not by colour
+   alone: the count beside it says the same in a number. */
+.chats__name--unread {
+  font-weight: 700;
+}
+
+.chats__last--unread {
+  color: var(--c-ink);
+}
+
+.chats__time--unread {
+  color: var(--c-accent-text);
+  font-weight: 700;
 }
 
 /* A link that is a button: "a:hover" of the stylesheet would paint its label in the accent

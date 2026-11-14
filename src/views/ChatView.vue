@@ -15,6 +15,7 @@ import { onSignal, RECONNECTED } from '@/stores/signal'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { auth } from '@/stores/auth'
+import { chats as chatStore } from '@/stores/chats'
 import { toastError } from '@/stores/toast'
 
 const props = defineProps<{ chatId: number }>()
@@ -125,6 +126,10 @@ onMounted(async () => {
     messages.value = page.slice().reverse()
     hasOlder.value = page.length === PAGE_SIZE
 
+    // The chat is on the screen: what is in it is read, and what arrives while it stays open
+    // will not be counted as new (stores/chats.ts).
+    chatStore.setOpen(props.chatId)
+
     timer = window.setInterval(poll, POLL_EVERY_MS)
   } catch (caught) {
     if (caught instanceof ApiError && caught.status === 404) {
@@ -151,6 +156,11 @@ const stopListening: (() => void)[] = [
 onBeforeUnmount(() => {
   window.clearInterval(timer)
   stopListening.forEach((stop) => stop())
+  // Off the screen: from now on what arrives here is new again. (Unless another chat has already
+  // taken the screen - moving from chat to chat mounts the next before this one is gone.)
+  if (chatStore.state.openId === props.chatId) {
+    chatStore.setOpen(null)
+  }
 })
 
 /** Fetches the newest page and adds what is not shown yet. Silent: a failed poll is retried. */
@@ -221,6 +231,7 @@ async function send(): Promise<void> {
   sending.value = true
   try {
     const message: ChatMessage = await api.postChatMessage(props.chatId, text)
+    chatStore.noteOwnMessage(props.chatId, message)
     draft.value = ''
     await addNew([message])
     await scrollToEnd()

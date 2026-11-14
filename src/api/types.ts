@@ -239,6 +239,10 @@ export interface Chat {
   eventId: number | null
   /** The kind of that plan, for its icon; null with eventId. */
   eventType: EventTypeCode | null
+  /** The newest message; null while nobody has written. */
+  lastMessage: ChatMessage | null
+  /** How many messages others wrote after the last one the reader has seen. */
+  unreadCount: number
 }
 
 export interface ChatMember {

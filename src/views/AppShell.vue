@@ -13,6 +13,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue'
 import { auth } from '@/stores/auth'
+import { chats } from '@/stores/chats'
 import { notifications } from '@/stores/notifications'
 
 const route = useRoute()
@@ -84,6 +85,15 @@ function bellName(): string {
         >
           <component :is="item.icon" class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
           <span class="hg-navitem__label app-wide-only">{{ item.label }}</span>
+          <!-- New messages across all chats. -->
+          <span
+            v-if="item.name === 'chats' && chats.totalUnread.value > 0"
+            class="hg-count"
+            :aria-label="chats.totalUnread.value + ' new messages'"
+            data-tst-id="nav-chats-unread"
+          >
+            {{ chats.totalUnread.value > 99 ? '99+' : chats.totalUnread.value }}
+          </span>
         </RouterLink>
 
         <RouterLink
@@ -202,7 +212,12 @@ function bellName(): string {
         :aria-current="isCurrent('chats') ? 'page' : undefined"
         data-tst-id="tab-chats"
       >
-        <MessageCircle class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <span class="shell__tab-icon">
+          <MessageCircle class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+          <span v-if="chats.totalUnread.value > 0" class="hg-count shell__tab-count" aria-hidden="true">
+            {{ chats.totalUnread.value > 99 ? '99+' : chats.totalUnread.value }}
+          </span>
+        </span>
         <span>Chats</span>
       </RouterLink>
     </nav>
@@ -242,6 +257,19 @@ function bellName(): string {
 
 .shell__theme + .hg-account {
   margin-top: 0;
+}
+
+/* The count of new messages on the Chats tab of a phone: on the corner of its icon. */
+.shell__tab-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.shell__tab-count {
+  position: absolute;
+  top: -6px;
+  left: 12px;
+  box-shadow: 0 0 0 2px var(--c-page);
 }
 
 .shell__me {

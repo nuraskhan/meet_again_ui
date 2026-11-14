@@ -118,6 +118,8 @@ export const api = {
     get<ChatMessage[]>(
       '/chat/' + chatId + '/message/list' + (beforeId === undefined ? '' : '?beforeId=' + beforeId),
     ),
+  /** The chat is read up to its newest message: its unread count becomes zero. */
+  markChatRead: (chatId: number) => post<void>('/chat/' + chatId + '/read'),
   postChatMessage: (chatId: number, text: string) =>
     post<ChatMessage>('/chat/' + chatId + '/message', { text }),
 
