@@ -12,6 +12,10 @@ export interface Profile {
   bio: string | null
   city: string | null
   birthDate: string | null // a date, not a moment: 1995-03-01
+  /**
+   * The server path of the uploaded picture (/public/avatar/<token>), never a link to another
+   * site. Shown through serverFileUrl() of api/http.ts.
+   */
   avatarUrl: string | null
 }
 
@@ -19,12 +23,12 @@ export interface MyProfile extends Profile {
   email: string
 }
 
+/** The text part of a profile. The picture is uploaded separately, as a file. */
 export interface UpdateProfileRequest {
   displayName: string
   bio: string | null
   city: string | null
   birthDate: string | null
-  avatarUrl: string | null
 }
 
 export interface Friend {

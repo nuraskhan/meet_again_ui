@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // A guest's preference for one event: where they are (the device's location, with their
-// permission, or a place they type) and how far they are ready to travel, in miles.
+// permission, a pin on the map, or a place they type) and how far they are ready to travel, in miles.
 
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api'
 import type { EventDto, Preference } from '@/api/types'
+import LocationMap from '@/components/LocationMap.vue'
 import { errorText, toastOk } from '@/stores/toast'
 
 const props = defineProps<{
@@ -77,7 +78,14 @@ function useDeviceLocation(): void {
   )
 }
 
-function forgetDeviceLocation(): void {
+/** The person clicked the map or dropped the pin. */
+function setPoint(latitude: number, longitude: number): void {
+  form.latitude = latitude
+  form.longitude = longitude
+  locationError.value = ''
+}
+
+function forgetPoint(): void {
   form.latitude = null
   form.longitude = null
 }
@@ -114,28 +122,45 @@ async function save(): Promise<void> {
     <fieldset class="preference__group">
       <legend class="field__label">Where are you?</legend>
 
-      <div v-if="hasCoordinates" class="preference__located" data-tst-id="preference-located">
-        <span>📍 Using the location of this device</span>
-        <button class="btn btn--ghost btn--small" type="button" @click="forgetDeviceLocation">Remove</button>
-      </div>
+      <LocationMap :latitude="form.latitude" :longitude="form.longitude" @pick="setPoint" />
 
-      <button
-        v-else
-        class="btn btn--ghost preference__locate"
-        type="button"
-        :disabled="locating"
-        data-tst-id="preference-locate"
-        @click="useDeviceLocation"
-      >
-        {{ locating ? 'Asking your browser…' : '📍 Use my current location' }}
-      </button>
+      <div class="preference__map-row">
+        <p class="small" :class="hasCoordinates ? 'preference__pinned' : 'muted'" data-tst-id="preference-located">
+          {{
+            hasCoordinates
+              ? '📍 Pin set. Drag it or click the map to move it.'
+              : 'Click the map to drop a pin, or use your current location.'
+          }}
+        </p>
+
+        <div class="row">
+          <button
+            class="btn btn--ghost btn--small"
+            type="button"
+            :disabled="locating"
+            data-tst-id="preference-locate"
+            @click="useDeviceLocation"
+          >
+            {{ locating ? 'Asking your browser…' : 'Use my current location' }}
+          </button>
+          <button
+            v-if="hasCoordinates"
+            class="btn btn--ghost btn--small"
+            type="button"
+            data-tst-id="preference-unpin"
+            @click="forgetPoint"
+          >
+            Remove pin
+          </button>
+        </div>
+      </div>
 
       <p v-if="locationError !== ''" class="small preference__location-error" role="alert">
         {{ locationError }}
       </p>
 
       <label class="field">
-        <span class="field__hint">{{ hasCoordinates ? 'Add a name for it (optional)' : 'or type it' }}</span>
+        <span class="field__hint">{{ hasCoordinates ? 'Add a name for the place (optional)' : 'or type where you are' }}</span>
         <input
           v-model="form.locationText"
           class="input"
@@ -148,7 +173,7 @@ async function save(): Promise<void> {
       </label>
 
       <p class="field__hint">
-        Your exact location stays private. The others see only what you type here, and that a location
+        The pin stays private. The others see only what you type here, and that a location
         was shared.
       </p>
     </fieldset>
@@ -211,19 +236,15 @@ async function save(): Promise<void> {
   border: 0;
 }
 
-.preference__locate {
-  justify-self: start;
-}
-
-.preference__located {
+.preference__map-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: var(--radius-s);
-  background: var(--c-teal-soft);
+  gap: 8px 12px;
+}
+
+.preference__pinned {
   color: var(--c-teal);
   font-weight: 600;
 }

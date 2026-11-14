@@ -1,6 +1,6 @@
 // Every endpoint of the server as a function. One line each: the path and the types.
 
-import { get, post } from './http'
+import { get, post, upload } from './http'
 import type {
   AuthResponse,
   Chat,
@@ -28,6 +28,9 @@ export const api = {
   // ---------------------------------------------------------------- profile
   myProfile: () => get<MyProfile>('/profile/me'),
   updateMyProfile: (request: UpdateProfileRequest) => post<MyProfile>('/profile/me', request),
+  /** Replaces the profile picture with this file. The server accepts JPEG and PNG up to 2 MB. */
+  uploadAvatar: (file: File) => upload<MyProfile>('/profile/me/avatar', file),
+  removeAvatar: () => post<MyProfile>('/profile/me/avatar/remove'),
   profile: (userId: number) => get<Profile>('/profile/' + userId),
   searchPeople: (text: string) => get<Profile[]>('/profile/search?text=' + encodeURIComponent(text)),
 

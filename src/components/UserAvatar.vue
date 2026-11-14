@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // A person's picture, or their initials on a colour that is always the same for the same person.
 
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { serverFileUrl } from '@/api/http'
 import { initials } from '@/lib/format'
 
 const props = withDefaults(
@@ -9,6 +10,7 @@ const props = withDefaults(
     name: string
     /** Decides the colour, so one person looks the same everywhere. */
     userId: number
+    /** The server path of the uploaded picture, as the server gives it; anything else is ignored. */
     avatarUrl?: string | null
     size?: number
   }>(),
@@ -23,6 +25,16 @@ const background = computed<string>(() => {
   const hue: number = HUES[Math.abs(props.userId) % HUES.length] ?? 14
   return 'hsl(' + hue + ' 55% 42%)'
 })
+
+/** Only a picture kept by our server is ever loaded; see serverFileUrl. */
+const source = computed<string | null>(() => serverFileUrl(props.avatarUrl))
+
+/** The picture failed to load (removed meanwhile): fall back to the initials. */
+const broken = ref<boolean>(false)
+
+watch(source, () => {
+  broken.value = false
+})
 </script>
 
 <template>
@@ -31,7 +43,7 @@ const background = computed<string>(() => {
     :style="{ width: size + 'px', height: size + 'px', fontSize: size * 0.4 + 'px', background }"
     aria-hidden="true"
   >
-    <img v-if="avatarUrl" class="avatar__image" :src="avatarUrl" alt="" />
+    <img v-if="source !== null && !broken" class="avatar__image" :src="source" alt="" @error="broken = true" />
     <template v-else>{{ initials(name) }}</template>
   </span>
 </template>

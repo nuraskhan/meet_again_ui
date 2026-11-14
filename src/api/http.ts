@@ -33,6 +33,28 @@ export function post<T>(path: string, body?: unknown): Promise<T> {
   return send<T>('POST', path, body)
 }
 
+/** Sends one file the way a form does, in a part named "file". */
+export function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData()
+  form.append('file', file)
+  return send<T>('POST', path, form)
+}
+
+/**
+ * The address of something the server serves by a path it gave us (a profile picture), or null if
+ * the path is not one of ours.
+ *
+ * Only paths under /public/ are turned into addresses. Anything else - above all a full URL to
+ * another site - is refused: a picture loaded from a foreign address would tell that address who
+ * is looking.
+ */
+export function serverFileUrl(path: string | null | undefined): string | null {
+  if (typeof path !== 'string' || !/^\/public\/[A-Za-z0-9/_-]+$/.test(path)) {
+    return null
+  }
+  return BASE_URL + path
+}
+
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {}
 
@@ -40,7 +62,10 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
   if (token !== null) {
     headers['Authorization'] = 'Bearer ' + token
   }
-  if (body !== undefined) {
+
+  // A form carries its own content type (with the boundary between its parts): the browser sets it.
+  const isForm: boolean = body instanceof FormData
+  if (body !== undefined && !isForm) {
     headers['Content-Type'] = 'application/json'
   }
 
@@ -49,7 +74,7 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
     response = await fetch(BASE_URL + path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, 'network', 'Cannot reach the server. Check your connection and try again.')
