@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // "Where to go": the places the server suggested for a plan, and the button that asks for them.
 // The suggestions are kept with the plan; this block shows what is kept, and asks again on request.
+// The look is the designers' "hg-places": cards side by side, one under another on a phone.
 
 import { computed, ref } from 'vue'
+import { MapPin, Star } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { EventDto, Suggestion } from '@/api/types'
-import { date, priceRange } from '@/lib/format'
+import { date, EVENT_TYPE_LOOK, priceRange } from '@/lib/format'
 import { errorText } from '@/stores/toast'
 
 const props = defineProps<{
@@ -36,16 +38,11 @@ async function ask(): Promise<void> {
     // "Nobody is on the map yet" is not a failure: it tells what to do first.
     problem.value =
       caught instanceof ApiError && caught.code === 'no_coordinates'
-        ? 'Nobody has put their location on the map yet. Drop your pin above, then ask again.'
+        ? 'Nobody has put their location on the map yet. Drop your pin first, then ask again.'
         : errorText(caught)
   } finally {
     busy.value = false
   }
-}
-
-/** "★ 4.8" */
-function stars(rating: number): string {
-  return '★ ' + rating.toFixed(1)
 }
 
 /** The place on OpenStreetMap, in a new tab. */
@@ -61,98 +58,100 @@ function safeWebsite(website: string | null): string | null {
 }
 </script>
 
+
 <template>
-  <section v-if="canAsk || event.suggestions.length > 0" class="section" data-tst-id="suggestions">
+  <section v-if="canAsk || event.suggestions.length > 0" class="places" data-tst-id="suggestions">
     <div class="places__head">
-      <h2 class="section__title places__title">Where to go</h2>
+      <h2 class="places__title">Where to go</h2>
       <button
         v-if="canAsk"
-        class="btn btn--small"
-        :class="{ 'btn--ghost': looked }"
+        class="hg-btn"
+        :class="[looked ? 'hg-btn--quiet' : 'hg-btn--neutral', { 'is-loading': busy }]"
         type="button"
         :disabled="busy"
         data-tst-id="suggestions-ask"
         @click="ask"
       >
-        {{ busy ? 'Looking…' : looked ? 'Suggest again' : 'Suggest places' }}
+        <span>{{ looked ? 'Suggest again' : 'Suggest places' }}</span>
       </button>
     </div>
 
-    <p v-if="problem !== ''" class="form-error places__problem" role="alert" data-tst-id="suggestions-problem">
+    <p v-if="problem !== ''" class="app-error places__problem" role="alert" data-tst-id="suggestions-problem">
       {{ problem }}
     </p>
 
-    <ol v-if="event.suggestions.length > 0" class="places">
+    <ol v-if="event.suggestions.length > 0" class="hg-places">
       <li
         v-for="suggestion in event.suggestions"
         :key="suggestion.placeId"
-        class="card place"
+        class="hg-card hg-place"
         data-tst-id="suggestion"
       >
-        <div class="place__top">
-          <span class="place__rank" aria-hidden="true">{{ suggestion.rank }}</span>
-          <div class="grow">
-            <h3 class="place__name">{{ suggestion.name }}</h3>
-            <p class="small muted">{{ suggestion.address }}</p>
-          </div>
-          <span class="place__rating" :aria-label="'Rated ' + suggestion.rating.toFixed(1) + ' out of 5'">
-            {{ stars(suggestion.rating) }}
+        <h3 class="hg-place__name places__name">{{ suggestion.name }}</h3>
+        <span class="hg-place__cat">
+          {{ EVENT_TYPE_LOOK[suggestion.category].label }}
+          <span class="hg-place__rating" :aria-label="'Rated ' + suggestion.rating.toFixed(1) + ' out of 5'">
+            <Star class="hg-icon" :stroke-width="1.5" aria-hidden="true" />{{ suggestion.rating.toFixed(1) }}
           </span>
-        </div>
+        </span>
+        <p class="hg-place__addr places__wrap">{{ suggestion.address }}</p>
 
-        <p v-if="suggestion.description" class="place__about">{{ suggestion.description }}</p>
+        <p v-if="suggestion.description" class="hg-place__addr places__wrap">{{ suggestion.description }}</p>
 
-        <ul class="place__facts">
-          <li v-if="suggestion.myDistanceMi !== null" data-tst-id="suggestion-my-distance">
-            <span aria-hidden="true">📍</span> {{ suggestion.myDistanceMi }} mi from you
-          </li>
+        <span v-if="suggestion.myDistanceMi !== null" class="hg-place__dist" data-tst-id="suggestion-my-distance">
+          <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />{{ suggestion.myDistanceMi }} mi from you
+        </span>
+
+        <ul class="places__facts hg-num">
           <li>
-            <span aria-hidden="true">👥</span>
             {{
               suggestion.participantsConsidered === 1
                 ? suggestion.averageDistanceMi + ' mi away'
                 : suggestion.averageDistanceMi + ' mi on average, ' + suggestion.farthestDistanceMi + ' mi for the farthest'
             }}
           </li>
-          <li><span aria-hidden="true">💸</span> {{ priceRange(suggestion.priceMin, suggestion.priceMax) }}</li>
+          <li>{{ priceRange(suggestion.priceMin, suggestion.priceMax) }}</li>
+          <li v-if="suggestion.phone">{{ suggestion.phone }}</li>
         </ul>
 
-        <div class="row place__foot">
-          <span v-if="!suggestion.withinEveryonesReach" class="badge badge--wait">Too far for someone</span>
-          <span v-if="!suggestion.fitsBudget" class="badge badge--wait">Outside the budget</span>
-          <span v-if="suggestion.sample" class="badge" title="An invented place for demonstration">Sample</span>
+        <div
+          v-if="!suggestion.withinEveryonesReach || !suggestion.fitsBudget || suggestion.sample"
+          class="places__badges"
+        >
+          <span v-if="!suggestion.withinEveryonesReach" class="hg-badge hg-badge--warning">Too far for someone</span>
+          <span v-if="!suggestion.fitsBudget" class="hg-badge hg-badge--warning">Outside the budget</span>
+          <span v-if="suggestion.sample" class="hg-badge" title="An invented place for demonstration">Sample</span>
+        </div>
 
-          <span class="place__links">
-            <a :href="mapLink(suggestion)" target="_blank" rel="noopener noreferrer">Map</a>
-            <a
-              v-if="safeWebsite(suggestion.website) !== null"
-              :href="safeWebsite(suggestion.website) ?? undefined"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Website
-            </a>
-            <span v-if="suggestion.phone" class="muted">{{ suggestion.phone }}</span>
-          </span>
+        <!-- Pushed to the bottom, so the links of cards of different height stand on one line. -->
+        <div class="places__links">
+          <a class="hg-link" :href="mapLink(suggestion)" target="_blank" rel="noopener noreferrer">Map</a>
+          <a
+            v-if="safeWebsite(suggestion.website) !== null"
+            class="hg-link"
+            :href="safeWebsite(suggestion.website) ?? undefined"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Website
+          </a>
         </div>
       </li>
     </ol>
 
-    <p v-if="event.suggestions.length > 0 && event.suggestedAt !== null" class="small muted places__basis">
+    <p v-if="event.suggestions.length > 0 && event.suggestedAt !== null" class="places__basis">
       Based on where {{ considered === 1 ? '1 person is' : considered + ' people are' }} coming from ·
       suggested {{ date(event.suggestedAt) }} · distances as the crow flies
     </p>
 
-    <div v-else-if="looked && event.suggestions.length === 0" class="empty" data-tst-id="suggestions-none">
-      <p>No places for this activity were found near you yet.</p>
-    </div>
+    <p v-else-if="looked && event.suggestions.length === 0" class="hg-card hg-card--quiet" data-tst-id="suggestions-none">
+      No places for this activity were found near you yet.
+    </p>
 
-    <div v-else-if="!looked" class="empty" data-tst-id="suggestions-not-yet">
-      <p>
-        Put your pin on the map above. Once everyone coming has done so, places appear here by
-        themselves - or press "Suggest places" any time.
-      </p>
-    </div>
+    <p v-else-if="!looked" class="hg-card hg-card--quiet" data-tst-id="suggestions-not-yet">
+      Places appear here once everyone coming has said where they are - or press "Suggest places"
+      any time.
+    </p>
   </section>
 </template>
 
@@ -160,91 +159,68 @@ function safeWebsite(website: string | null): string | null {
 .places__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
 }
 
 .places__title {
-  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+  font: var(--t-title-2);
 }
 
 .places__problem {
-  margin-bottom: 12px;
+  margin-bottom: var(--s-4);
 }
 
-.places {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.place__top {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.place__rank {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--c-ink);
-  color: var(--c-page);
-  font-family: var(--font-display);
-  font-weight: 700;
-}
-
-.place__name {
-  font-size: 1.1rem;
+/* A long name or address without spaces must not push a card wider than its column. */
+.places__name,
+.places__wrap {
   overflow-wrap: anywhere;
 }
 
-.place__rating {
-  flex: none;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--c-wait-soft);
-  color: var(--c-wait);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.place__about {
-  margin-top: 10px;
-  overflow-wrap: anywhere;
-}
-
-.place__facts {
+.places__facts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
   color: var(--c-ink-soft);
-  font-size: 0.92rem;
+  font: var(--t-small);
 }
 
-.place__foot {
-  margin-top: 12px;
-}
-
-.place__links {
-  display: inline-flex;
+.places__badges {
+  display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-left: auto;
-  font-size: 0.92rem;
-  font-weight: 600;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+
+.places__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  margin-top: auto;
+  padding-top: var(--s-3);
+  font: var(--t-small);
 }
 
 .places__basis {
-  margin-top: 10px;
+  margin-top: var(--s-3);
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+}
+
+/* Between the phone (one column, in main.css) and a wide screen three cards do not fit next to the
+   rail: two in a row. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .hg-places {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .places__head {
+    flex-wrap: wrap;
+  }
 }
 </style>

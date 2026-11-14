@@ -1,22 +1,36 @@
 <script setup lang="ts">
-// Home of a logged-in user: invitations waiting for an answer, then every plan they are part of.
+// Home of a logged-in user: invitations waiting for an answer, then every plan they are part of -
+// what is coming up as cards, what is over or called off behind a row that folds.
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { CalendarDays, Clock, Globe, Plus } from 'lucide-vue-next'
 import { onSignal } from '@/stores/signal'
 import { api } from '@/api'
-import type { EventDto, Invitation } from '@/api/types'
+import type { EventDto, Invitation, Invitee } from '@/api/types'
 import EventSummary from '@/components/EventSummary.vue'
+import EventTypeIcon from '@/components/EventTypeIcon.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
+import { EVENT_TYPE_LOOK, proposedTimesSummary } from '@/lib/format'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
 const router = useRouter()
+
+/** How many cards the skeleton shows while the lists are on their way. */
+const SKELETONS: number = 4
+/** A card shows this many faces at most; the count next to them says the rest. */
+const FACES: number = 4
 
 const invitations = ref<Invitation[]>([])
 const events = ref<EventDto[]>([])
 const loading = ref<boolean>(true)
 /** The invitation being answered right now, to disable its buttons. */
 const answering = ref<number | null>(null)
+/** The answer being sent is "I'm coming": tells which of the two buttons shows the spinner. */
+const accepting = ref<boolean>(false)
+/** The past plans are unfolded. */
+const closedOpen = ref<boolean>(true)
 
 // An unanswered invitation is shown at the top; the same event is not repeated in the list below.
 const plans = computed<EventDto[]>(() => {
@@ -50,10 +64,11 @@ async function load(): Promise<void> {
 
 async function answer(invitation: Invitation, accept: boolean): Promise<void> {
   answering.value = invitation.invitationId
+  accepting.value = accept
   try {
     if (accept) {
       await api.acceptInvitation(invitation.invitationId)
-      toastOk('You are in! Now say where you are coming from.')
+      toastOk('You are coming. Now say where you are coming from.')
       // The plan page asks for the guest's location and travel distance.
       await router.push({ name: 'plan', params: { eventId: invitation.event.id } })
       return
@@ -69,186 +84,431 @@ async function answer(invitation: Invitation, accept: boolean): Promise<void> {
   }
 }
 
-/** "2 of 3 are in", or what the current user answered. */
-function standing(event: EventDto): { text: string; kind: string } {
+/** The guests who said yes, in the order the server gives them. */
+function coming(event: EventDto): Invitee[] {
+  return event.invitees.filter((invitee) => invitee.status === 'ACCEPTED')
+}
+
+/** "2 of 3 coming"; for a plan that is over, "2 came". */
+function crowd(event: EventDto): string {
+  const going: number = coming(event).length
+  if (event.status === 'EXPIRED') {
+    return going + ' came'
+  }
+  return going + ' of ' + event.invitees.length + ' coming'
+}
+
+/** What happened to the plan or what the current user answered; null = nothing worth a badge. */
+function standing(event: EventDto): { text: string; kind: string } | null {
   if (event.status === 'CANCELLED') {
-    return { text: 'Cancelled', kind: 'badge--no' }
+    return { text: 'Cancelled', kind: '' }
   }
   if (event.status === 'EXPIRED') {
-    return { text: 'Past', kind: '' }
+    return { text: 'Over', kind: '' }
   }
 
-  const mine = event.invitees.find((invitee) => invitee.userId === auth.state.userId)
+  const mine: Invitee | undefined = event.invitees.find((invitee) => invitee.userId === auth.state.userId)
   if (mine?.status === 'DECLINED') {
-    return { text: 'You declined', kind: 'badge--no' }
+    return { text: 'You declined', kind: 'hg-badge--danger' }
   }
-
-  const going: number = event.invitees.filter((invitee) => invitee.status === 'ACCEPTED').length
-  return {
-    text: going + ' of ' + event.invitees.length + (going === 1 ? ' is in' : ' are in'),
-    kind: going > 0 ? 'badge--yes' : 'badge--wait',
-  }
+  return null
 }
 </script>
 
 <template>
-  <main class="page">
-    <div class="page__head">
-      <h1 class="page__title">Plans</h1>
-      <RouterLink class="btn" :to="{ name: 'plan-new' }" data-tst-id="plans-new">+ New invitation</RouterLink>
+  <div class="app-col">
+    <div class="app-head">
+      <h1 class="app-head__title">Plans</h1>
+      <RouterLink class="hg-btn hg-btn--neutral plans__new" :to="{ name: 'plan-new' }" data-tst-id="plans-new">
+        <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <span>New plan</span>
+      </RouterLink>
     </div>
 
-    <p v-if="loading" class="muted">Loading…</p>
+    <!-- ------------------------------------------------------------ loading: the shape of the cards -->
+    <div v-if="loading" aria-busy="true">
+      <span class="hg-sr">Loading your plans</span>
+      <span class="hg-skel plans__skel-heading" aria-hidden="true"></span>
+      <div class="plans__grid" aria-hidden="true">
+        <div v-for="index in SKELETONS" :key="index" class="hg-card plans__card">
+          <span class="hg-skel hg-skel--line plans__skel-kind"></span>
+          <span class="hg-skel plans__skel-title"></span>
+          <span class="hg-skel hg-skel--line plans__skel-when"></span>
+          <span class="plans__crowd">
+            <span class="hg-skel hg-skel--circle plans__skel-face"></span>
+            <span class="hg-skel hg-skel--line plans__skel-count"></span>
+          </span>
+        </div>
+      </div>
+    </div>
 
     <template v-else>
-      <section v-if="invitations.length > 0" data-tst-id="plans-invitations">
-        <h2 class="section__title">Waiting for your answer</h2>
+      <!-- ---------------------------------------------------------- invitations -->
+      <section v-if="invitations.length > 0" class="app-section" data-tst-id="plans-invitations">
+        <h2 class="plans__heading">
+          Waiting for your answer <span class="hg-soft hg-num">{{ invitations.length }}</span>
+        </h2>
 
-        <div class="stack">
+        <div class="app-stack">
           <article
             v-for="invitation in invitations"
             :key="invitation.invitationId"
-            class="card invitation"
+            class="hg-card hg-card--accent plans__invitation"
             data-tst-id="invitation"
           >
-            <p class="small muted invitation__from">
-              <strong>{{ invitation.event.creatorName }}</strong> invites you
-            </p>
+            <UserAvatar :name="invitation.event.creatorName" :user-id="invitation.event.creatorId" :size="40" />
 
-            <EventSummary :event="invitation.event" />
+            <div class="plans__invitation-body">
+              <p class="plans__from">
+                <b>{{ invitation.event.creatorName }}</b> invites you
+              </p>
+              <RouterLink
+                class="plans__invitation-link"
+                :to="{ name: 'plan', params: { eventId: invitation.event.id } }"
+              >
+                <EventSummary :event="invitation.event" />
+              </RouterLink>
+            </div>
 
-            <p v-if="invitation.event.description" class="invitation__note">
-              {{ invitation.event.description }}
-            </p>
-
-            <div class="row invitation__actions">
+            <div class="plans__answers">
               <button
-                class="btn btn--yes"
+                class="hg-btn hg-btn--primary"
+                :class="{ 'is-loading': answering === invitation.invitationId && accepting }"
                 type="button"
                 :disabled="answering === invitation.invitationId"
                 data-tst-id="invitation-accept"
                 @click="answer(invitation, true)"
               >
-                I'm in
+                <span>I'm coming</span>
               </button>
               <button
-                class="btn btn--ghost"
+                class="hg-btn hg-btn--outline"
+                :class="{ 'is-loading': answering === invitation.invitationId && !accepting }"
                 type="button"
                 :disabled="answering === invitation.invitationId"
                 data-tst-id="invitation-decline"
                 @click="answer(invitation, false)"
               >
-                Can't make it
+                <span>I can't</span>
               </button>
-              <RouterLink
-                class="small invitation__details"
-                :to="{ name: 'plan', params: { eventId: invitation.event.id } }"
-              >
-                Details
-              </RouterLink>
             </div>
           </article>
         </div>
       </section>
 
-      <section :class="{ section: invitations.length > 0 }">
-        <h2 v-if="invitations.length > 0" class="section__title">Your plans</h2>
+      <!-- ---------------------------------------------------------- what is coming up -->
+      <section v-if="upcoming.length > 0" class="app-section">
+        <h2 class="plans__heading">Upcoming</h2>
 
-        <div v-if="upcoming.length > 0" class="stack">
+        <div class="plans__grid">
           <RouterLink
             v-for="event in upcoming"
             :key="event.id"
-            class="card card--link"
+            class="hg-card hg-card--link plans__card"
             :to="{ name: 'plan', params: { eventId: event.id } }"
             data-tst-id="plan-card"
           >
-            <EventSummary :event="event" />
-
-            <div class="row plan__foot">
-              <span class="badge" :class="standing(event).kind">{{ standing(event).text }}</span>
-              <span class="small muted">
-                {{ event.creatorId === auth.state.userId ? 'You invited' : event.creatorName + ' invited' }}
+            <div class="plans__card-top">
+              <span class="hg-plan__kind">
+                <EventTypeIcon :type="event.eventType" :size="16" />
+                {{ EVENT_TYPE_LOOK[event.eventType].label }}
               </span>
+              <span class="plans__badges">
+                <span v-if="event.visibility === 'PUBLIC'" class="hg-badge">
+                  <Globe class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  Public
+                </span>
+                <span v-if="event.creatorId === auth.state.userId" class="hg-badge">You organise</span>
+                <span v-if="standing(event) !== null" class="hg-badge" :class="standing(event)?.kind">
+                  {{ standing(event)?.text }}
+                </span>
+              </span>
+            </div>
+
+            <h3 class="hg-plan__title">{{ event.title }}</h3>
+
+            <span class="hg-plan__fact plans__when" data-tst-id="summary-when">
+              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              {{ proposedTimesSummary(event.proposedTimes) }}
+            </span>
+
+            <div class="plans__crowd">
+              <span v-if="coming(event).length > 0" class="hg-stack">
+                <UserAvatar
+                  v-for="invitee in coming(event).slice(0, FACES)"
+                  :key="invitee.userId"
+                  :name="invitee.displayName"
+                  :user-id="invitee.userId"
+                  :size="32"
+                />
+              </span>
+              <span class="plans__count hg-num">{{ crowd(event) }}</span>
             </div>
           </RouterLink>
         </div>
-
-        <div v-else-if="invitations.length === 0" class="empty" data-tst-id="plans-empty">
-          <p class="plans__empty-title">{{ closed.length > 0 ? 'Nothing coming up' : 'Nothing planned yet' }}</p>
-          <p>{{ closed.length > 0 ? 'Time for a new one?' : 'Send the first invitation - it takes a minute.' }}</p>
-          <RouterLink class="btn plans__empty-button" :to="{ name: 'plan-new' }">Invite friends</RouterLink>
-        </div>
       </section>
 
-      <!-- What is over or was called off: still there to look at, out of the way. -->
-      <section v-if="closed.length > 0" class="section" data-tst-id="plans-closed">
-        <h2 class="section__title">Past and cancelled</h2>
+      <div v-else-if="invitations.length === 0" class="hg-empty plans__empty" data-tst-id="plans-empty">
+        <CalendarDays class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <h2 class="hg-empty__title">{{ closed.length > 0 ? 'Nothing coming up' : 'No plans yet' }}</h2>
+        <p class="hg-empty__text">
+          {{
+            closed.length > 0
+              ? 'When you make a plan or someone invites you, it appears here.'
+              : 'Invite your friends to the first one. It takes a minute.'
+          }}
+        </p>
+        <RouterLink class="hg-btn hg-btn--primary plans__start" :to="{ name: 'plan-new' }">
+          <span>New plan</span>
+        </RouterLink>
+      </div>
 
-        <div class="stack">
+      <!-- What is over or was called off: still there to look at, out of the way. -->
+      <section v-if="closed.length > 0" data-tst-id="plans-closed">
+        <button
+          class="hg-row hg-row--link plans__toggle"
+          type="button"
+          :aria-expanded="closedOpen"
+          aria-controls="plans-closed-list"
+          data-tst-id="plans-closed-toggle"
+          @click="closedOpen = !closedOpen"
+        >
+          <span class="hg-iconcircle">
+            <CalendarDays class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+          </span>
+          <span class="hg-row__text plans__toggle-text">
+            <span class="hg-row__title">Past plans ({{ closed.length }})</span>
+            <span class="hg-row__sub">{{ closedOpen ? 'Hide' : 'Show' }}</span>
+          </span>
+        </button>
+
+        <div v-show="closedOpen" id="plans-closed-list" class="plans__grid plans__grid--closed">
           <RouterLink
             v-for="event in closed"
             :key="event.id"
-            class="card card--link plan--off"
+            class="hg-card hg-card--link hg-card--quiet plans__card plans__card--quiet"
             :to="{ name: 'plan', params: { eventId: event.id } }"
             data-tst-id="plan-card-closed"
           >
-            <EventSummary :event="event" />
-
-            <div class="row plan__foot">
-              <span class="badge" :class="standing(event).kind">{{ standing(event).text }}</span>
-              <span class="small muted">
-                {{ event.creatorId === auth.state.userId ? 'You invited' : event.creatorName + ' invited' }}
+            <div class="plans__card-top">
+              <span class="hg-plan__kind">
+                <EventTypeIcon :type="event.eventType" :size="16" />
+                {{ EVENT_TYPE_LOOK[event.eventType].label }}
               </span>
+              <span class="plans__badges">
+                <span v-if="standing(event) !== null" class="hg-badge" :class="standing(event)?.kind">
+                  {{ standing(event)?.text }}
+                </span>
+              </span>
+            </div>
+
+            <h3 class="hg-plan__title">{{ event.title }}</h3>
+
+            <span class="hg-plan__fact plans__when" data-tst-id="summary-when">
+              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              {{ proposedTimesSummary(event.proposedTimes) }}
+            </span>
+
+            <div class="plans__crowd">
+              <span v-if="coming(event).length > 0" class="hg-stack">
+                <UserAvatar
+                  v-for="invitee in coming(event).slice(0, FACES)"
+                  :key="invitee.userId"
+                  :name="invitee.displayName"
+                  :user-id="invitee.userId"
+                  :size="32"
+                />
+              </span>
+              <span class="plans__count hg-num">{{ crowd(event) }}</span>
             </div>
           </RouterLink>
         </div>
       </section>
     </template>
-  </main>
+  </div>
 </template>
 
 <style scoped>
-.invitation {
-  border-color: color-mix(in srgb, var(--c-accent) 45%, var(--c-line));
+/* main.css colours every link, and every hovered link, as a text link: the links that are buttons
+ * or cards keep their own colours. */
+.plans__new:hover {
+  color: var(--c-on-ink);
 }
 
-.invitation__from {
-  margin-bottom: 12px;
+.plans__start:hover {
+  color: var(--c-on-accent);
 }
 
-.invitation__note {
-  margin-top: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-s);
-  background: var(--c-surface-soft);
+.plans__heading {
+  margin-bottom: var(--s-4);
+  font: var(--t-title-2);
+}
+
+/* ---- an invitation: who, what, and the two answers ---- */
+.plans__invitation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.plans__invitation-body {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.plans__from {
   overflow-wrap: anywhere;
 }
 
-.invitation__actions {
-  margin-top: 16px;
-}
-
-.invitation__details {
-  margin-left: auto;
-}
-
-.plan__foot {
-  margin-top: 14px;
-  justify-content: space-between;
-}
-
-.plan--off {
-  opacity: 0.6;
-}
-
-.plans__empty-title {
-  margin-bottom: 4px;
+.plans__invitation-link,
+.plans__invitation-link:hover {
+  display: block;
   color: var(--c-ink);
-  font-size: 1.1rem;
-  font-weight: 700;
 }
 
-.plans__empty-button {
-  margin-top: 16px;
+.plans__answers {
+  display: flex;
+  gap: var(--s-2);
+}
+
+/* ---- a plan card ---- */
+.plans__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: var(--s-4);
+}
+
+.plans__grid--closed {
+  margin-top: var(--s-4);
+}
+
+.plans__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.plans__card,
+.plans__card:hover {
+  color: var(--c-ink);
+}
+
+.plans__card--quiet,
+.plans__card--quiet:hover {
+  color: var(--c-ink-soft);
+}
+
+.plans__card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.plans__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s-1);
+}
+
+.plans__when {
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bottom line stays at the bottom when a neighbour's title takes two lines. */
+.plans__crowd {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--size-control-sm);
+  margin-top: auto;
+}
+
+.plans__count {
+  font: var(--t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the row that folds the past plans: a button dressed as a list row ---- */
+.plans__toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-m);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.plans__toggle:not(:hover):not(:active) {
+  background: none;
+}
+
+.plans__toggle-text {
+  border-bottom: 0;
+}
+
+.plans__empty {
+  margin-bottom: var(--s-6);
+}
+
+/* ---- skeleton: the cards before they have come ---- */
+.plans__skel-heading {
+  width: 160px;
+  height: var(--s-5);
+  margin-bottom: var(--s-4);
+}
+
+.plans__skel-kind {
+  width: 30%;
+}
+
+.plans__skel-title {
+  width: 80%;
+  height: var(--s-5);
+}
+
+.plans__skel-when {
+  width: 50%;
+}
+
+.plans__skel-face {
+  width: var(--size-control-sm);
+  height: var(--size-control-sm);
+}
+
+.plans__skel-count {
+  width: var(--s-8);
+}
+
+@media (max-width: 767px) {
+  .plans__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The two answers go under the invitation, sharing its width. */
+  .plans__invitation-body {
+    flex-basis: calc(100% - var(--size-control) - var(--s-4));
+  }
+
+  .plans__answers {
+    width: 100%;
+  }
+
+  .plans__answers .hg-btn {
+    flex: 1;
+  }
+
+  .plans__new {
+    width: 100%;
+  }
 }
 </style>

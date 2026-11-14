@@ -1,13 +1,17 @@
 <script setup lang="ts">
 // The invitation form. Choosing a type fills it in; the user changes what they want, ticks the
-// friends and sends.
+// friends and sends. Beside the form, on a wide screen, stands the invitation as the guests will
+// see it - built here from what is typed, nothing is asked from the server for it.
 
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import type { EventTypeCode, EventTypeInfo, EventVisibility, Friend } from '@/api/types'
+import { Clock, MapPin, Plus, Wallet, X } from 'lucide-vue-next'
+import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import { distanceRange, EVENT_TYPE_LOOK, localInputToIso, priceRange } from '@/lib/format'
+import { dateTime, distanceRange, EVENT_TYPE_LOOK, localInputToIso, priceRange } from '@/lib/format'
+import { auth } from '@/stores/auth'
 import { errorText, toastError, toastOk } from '@/stores/toast'
 
 const route = useRoute()
@@ -18,6 +22,8 @@ const friends = ref<Friend[]>([])
 const loading = ref<boolean>(true)
 const busy = ref<boolean>(false)
 const error = ref<string>('')
+/** Which pair of fields the error is about, to mark it red; null when it came from the server. */
+const errorField = ref<'distance' | 'price' | null>(null)
 
 const chosen = ref<EventTypeCode | null>(null)
 
@@ -41,6 +47,25 @@ const MAX_TIMES = 10
 // Nobody has to be ticked: the plan can be shared by its link afterwards.
 const canSend = computed<boolean>(() => chosen.value !== null && !busy.value)
 
+/** The dates typed so far, as the guests will read them. Empty and unfinished ones are left out. */
+const previewTimes = computed<string[]>(() =>
+  form.times
+    .map(localInputToIso)
+    .filter((iso): iso is string => iso !== null)
+    .map(dateTime),
+)
+
+/** The name the invitation is signed with; the profile may still be loading right after a reload. */
+const myName = computed<string>(() => auth.state.profile?.displayName ?? '')
+
+const sendLabel = computed<string>(() =>
+  form.visibility === 'PUBLIC'
+    ? 'Post to the feed'
+    : form.inviteeIds.length === 0
+      ? 'Create and get the link'
+      : 'Send invitation',
+)
+
 onMounted(async () => {
   try {
     const [typeList, friendList] = await Promise.all([api.eventTypes(), api.friends()])
@@ -62,6 +87,7 @@ function choose(type: EventTypeInfo): void {
   form.priceMin = type.defaultPriceMin
   form.priceMax = type.defaultPriceMax
   error.value = ''
+  errorField.value = null
 }
 
 function toggle(userId: number): void {
@@ -79,14 +105,17 @@ async function send(): Promise<void> {
   }
   if (form.distanceMinMi > form.distanceMaxMi) {
     error.value = 'The shortest distance is greater than the longest.'
+    errorField.value = 'distance'
     return
   }
   if (form.priceMin > form.priceMax) {
     error.value = 'The lowest price is greater than the highest.'
+    errorField.value = 'price'
     return
   }
 
   error.value = ''
+  errorField.value = null
   busy.value = true
   try {
     const event = await api.createEvent({
@@ -126,471 +155,520 @@ async function send(): Promise<void> {
 </script>
 
 <template>
-  <main class="page">
-    <div class="page__head">
-      <h1 class="page__title">New invitation</h1>
-      <RouterLink class="btn btn--ghost btn--small" :to="{ name: 'plans' }">Cancel</RouterLink>
+  <div class="app-col app-col--wide">
+    <div class="app-head">
+      <h1 class="app-head__title">New plan</h1>
     </div>
 
-    <p v-if="loading" class="muted">Loading…</p>
+    <p v-if="loading" class="hg-soft">Loading…</p>
 
-    <form v-else class="stack new" data-tst-id="plan-new-form" @submit.prevent="send">
-      <!-- ---------------------------------------------------------- 1. what -->
-      <section>
-        <h2 class="section__title">1. What are we doing?</h2>
+    <div v-else class="new">
+      <form class="new__form" data-tst-id="plan-new-form" @submit.prevent="send">
+        <!-- ---------------------------------------------------------- what -->
+        <section>
+          <h2 class="new__title">What</h2>
 
-        <div class="new__types">
-          <button
-            v-for="type in types"
-            :key="type.eventType"
-            class="type"
-            :class="{ 'type--chosen': chosen === type.eventType }"
-            type="button"
-            :aria-pressed="chosen === type.eventType"
-            :data-tst-id="'plan-new-type-' + type.eventType"
-            @click="choose(type)"
-          >
-            <span class="type__icon" aria-hidden="true">{{ EVENT_TYPE_LOOK[type.eventType].icon }}</span>
-            <span class="type__label">{{ EVENT_TYPE_LOOK[type.eventType].label }}</span>
-          </button>
-        </div>
-      </section>
+          <div class="new__types">
+            <button
+              v-for="type in types"
+              :key="type.eventType"
+              class="new__type"
+              type="button"
+              :aria-pressed="chosen === type.eventType"
+              :data-tst-id="'plan-new-type-' + type.eventType"
+              @click="choose(type)"
+            >
+              <EventTypeIcon :type="type.eventType" />
+              <span class="new__type-label">{{ EVENT_TYPE_LOOK[type.eventType].label }}</span>
+            </button>
+          </div>
 
-      <template v-if="chosen !== null">
-        <!-- -------------------------------------------------------- 2. details -->
-        <section class="card stack">
-          <h2 class="section__title new__card-title">2. The details</h2>
-          <p class="small muted new__prefilled">Filled in for you - change anything.</p>
+          <p v-if="chosen !== null" class="new__hint new__hint--below">Filled in for you - change anything.</p>
+        </section>
 
-          <label class="field">
-            <span class="field__label">Title</span>
-            <input
-              v-model.trim="form.title"
-              class="input"
-              type="text"
-              maxlength="200"
-              required
-              data-tst-id="plan-new-title"
-            />
-          </label>
-
-          <fieldset class="new__range">
-            <legend class="field__label">When</legend>
-
-            <div v-for="(_, index) in form.times" :key="index" class="new__time">
+        <template v-if="chosen !== null">
+          <!-- -------------------------------------------------------- title and note -->
+          <section class="app-stack">
+            <label class="hg-field">
+              <span class="hg-field__label">Title</span>
               <input
-                v-model="form.times[index]"
-                class="input"
-                type="datetime-local"
-                :aria-label="'Proposed date ' + (index + 1)"
-                :data-tst-id="'plan-new-when-' + index"
+                v-model.trim="form.title"
+                class="hg-input"
+                type="text"
+                maxlength="200"
+                required
+                data-tst-id="plan-new-title"
               />
-              <button
-                v-if="form.times.length > 1"
-                class="new__time-remove"
-                type="button"
-                :aria-label="'Remove proposed date ' + (index + 1)"
-                @click="form.times.splice(index, 1)"
-              >
-                ✕
-              </button>
+            </label>
+
+            <label class="hg-field">
+              <span class="hg-field__label">Note</span>
+              <textarea
+                v-model="form.description"
+                class="hg-textarea"
+                maxlength="2000"
+                placeholder="Anything the guests should know. Optional."
+                data-tst-id="plan-new-note"
+              ></textarea>
+            </label>
+          </section>
+
+          <!-- -------------------------------------------------------- when -->
+          <section>
+            <h2 class="new__title new__title--tight">When</h2>
+            <p class="new__hint new__hint--above">
+              Offer several and let people choose. Leave empty to agree on the time in the chat.
+            </p>
+
+            <div class="app-stack app-stack--tight">
+              <div v-for="(_, index) in form.times" :key="index" class="new__time">
+                <input
+                  v-model="form.times[index]"
+                  class="hg-input hg-num"
+                  type="datetime-local"
+                  :aria-label="'Date and time ' + (index + 1)"
+                  :data-tst-id="'plan-new-when-' + index"
+                />
+                <button
+                  v-if="form.times.length > 1"
+                  class="hg-iconbtn"
+                  type="button"
+                  :aria-label="'Remove date ' + (index + 1)"
+                  title="Remove this date"
+                  @click="form.times.splice(index, 1)"
+                >
+                  <X class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
-            <div>
-              <button
-                v-if="form.times.length < MAX_TIMES"
-                class="btn btn--ghost btn--small"
-                type="button"
-                data-tst-id="plan-new-when-add"
-                @click="form.times.push('')"
-              >
-                + Offer another date
-              </button>
-            </div>
+            <button
+              v-if="form.times.length < MAX_TIMES"
+              class="hg-btn hg-btn--quiet new__time-add"
+              type="button"
+              data-tst-id="plan-new-when-add"
+              @click="form.times.push('')"
+            >
+              <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Add another date</span>
+            </button>
+          </section>
 
-            <span class="field__hint">
-              Offer one date or several to choose from. Leave empty to agree on the time in the chat.
-            </span>
-          </fieldset>
-
-          <div class="new__pair">
-            <fieldset class="new__range">
-              <legend class="field__label">Distance from you, miles</legend>
-              <div class="new__range-inputs">
+          <!-- -------------------------------------------------------- how far, how much -->
+          <section class="new__pair">
+            <div
+              class="hg-field"
+              :class="{ 'hg-field--error': errorField === 'distance' }"
+              role="group"
+              aria-label="How far, miles"
+            >
+              <span class="hg-field__label">How far, miles</span>
+              <div class="new__range">
                 <input
                   v-model.number="form.distanceMinMi"
-                  class="input"
+                  class="hg-input hg-num"
                   type="number"
                   min="0"
                   max="1000"
                   required
-                  aria-label="Shortest distance, miles"
+                  aria-label="From, miles"
                   data-tst-id="plan-new-distance-min"
                 />
-                <span class="muted">to</span>
+                <span class="hg-soft">to</span>
                 <input
                   v-model.number="form.distanceMaxMi"
-                  class="input"
+                  class="hg-input hg-num"
                   type="number"
                   min="0"
                   max="1000"
                   required
-                  aria-label="Longest distance, miles"
+                  aria-label="To, miles"
                   data-tst-id="plan-new-distance-max"
                 />
               </div>
-              <span class="field__hint">{{ distanceRange(form.distanceMinMi, form.distanceMaxMi) }}</span>
-            </fieldset>
+              <p class="hg-field__msg">{{ distanceRange(form.distanceMinMi, form.distanceMaxMi) }}</p>
+            </div>
 
-            <fieldset class="new__range">
-              <legend class="field__label">Budget per person</legend>
-              <div class="new__range-inputs">
+            <div
+              class="hg-field"
+              :class="{ 'hg-field--error': errorField === 'price' }"
+              role="group"
+              aria-label="How much, per person"
+            >
+              <span class="hg-field__label">How much, per person</span>
+              <div class="new__range">
                 <input
                   v-model.number="form.priceMin"
-                  class="input"
+                  class="hg-input hg-num"
                   type="number"
                   min="0"
                   step="100"
                   required
-                  aria-label="Lowest price"
+                  aria-label="From, per person"
                   data-tst-id="plan-new-price-min"
                 />
-                <span class="muted">to</span>
+                <span class="hg-soft">to</span>
                 <input
                   v-model.number="form.priceMax"
-                  class="input"
+                  class="hg-input hg-num"
                   type="number"
                   min="0"
                   step="100"
                   required
-                  aria-label="Highest price"
+                  aria-label="To, per person"
                   data-tst-id="plan-new-price-max"
                 />
               </div>
-              <span class="field__hint">{{ priceRange(form.priceMin, form.priceMax) }}</span>
-            </fieldset>
-          </div>
+              <p class="hg-field__msg">{{ priceRange(form.priceMin, form.priceMax) }}</p>
+            </div>
+          </section>
 
-          <label class="field">
-            <span class="field__label">A note for your friends</span>
-            <textarea
-              v-model="form.description"
-              class="input"
-              maxlength="2000"
-              placeholder="Anything they should know"
-              data-tst-id="plan-new-note"
-            ></textarea>
-          </label>
-        </section>
+          <!-- -------------------------------------------------------- who -->
+          <section>
+            <h2 class="new__title">Who</h2>
 
-        <!-- -------------------------------------------------------- 3. who -->
-        <section class="card">
-          <h2 class="section__title new__card-title">3. Who is invited?</h2>
-
-          <!-- Only the invited, or everyone: a public plan is shown in the feed. -->
-          <div class="new__who" role="radiogroup" aria-label="Who can join">
-            <label class="who-option" :class="{ 'who-option--on': form.visibility === 'PRIVATE' }">
-              <input
-                v-model="form.visibility"
-                class="who-option__radio"
-                type="radio"
-                value="PRIVATE"
+            <!-- Only the invited, or everyone: a public plan is shown in the feed. -->
+            <div class="hg-seg new__seg" role="radiogroup" aria-label="Who">
+              <button
+                class="hg-seg__opt"
+                type="button"
+                role="radio"
+                :aria-checked="form.visibility === 'PRIVATE'"
                 data-tst-id="plan-new-private"
-              />
-              <span>
-                <span class="who-option__title">🔒 Only people I invite</span>
-                <span class="small muted who-option__text">Friends you tick, and anyone you send the link to.</span>
-              </span>
-            </label>
-
-            <label class="who-option" :class="{ 'who-option--on': form.visibility === 'PUBLIC' }">
-              <input
-                v-model="form.visibility"
-                class="who-option__radio"
-                type="radio"
-                value="PUBLIC"
+                @click="form.visibility = 'PRIVATE'"
+              >
+                Only people I invite
+              </button>
+              <button
+                class="hg-seg__opt"
+                type="button"
+                role="radio"
+                :aria-checked="form.visibility === 'PUBLIC'"
                 data-tst-id="plan-new-public"
-              />
-              <span>
-                <span class="who-option__title">📣 Everyone</span>
-                <span class="small muted who-option__text">
-                  Shown in the feed. Anyone can join and enters the group chat; you can remove a guest.
-                </span>
-              </span>
-            </label>
-          </div>
+                @click="form.visibility = 'PUBLIC'"
+              >
+                Everyone
+              </button>
+            </div>
 
-          <p class="small muted new__who-hint" data-tst-id="plan-new-link-hint">
-            <template v-if="form.visibility === 'PUBLIC'">
-              You can still invite friends by name: they get the invitation directly.
-            </template>
-            <template v-else-if="friends.length === 0">
-              You have no friends here yet - that is fine. After creating the plan you get a link to
-              send to anyone.
-            </template>
-            <template v-else>
-              Tick friends, or tick nobody and send the link you get after creating the plan.
-            </template>
-          </p>
-
-          <ul v-if="friends.length > 0" class="new__friends">
-            <li v-for="friend in friends" :key="friend.userId">
-              <label class="friend" :class="{ 'friend--picked': form.inviteeIds.includes(friend.userId) }">
+            <div v-if="friends.length > 0" class="new__friends">
+              <label v-for="friend in friends" :key="friend.userId" class="hg-row hg-row--link">
                 <input
-                  class="friend__box"
+                  class="new__check"
                   type="checkbox"
                   :checked="form.inviteeIds.includes(friend.userId)"
                   :data-tst-id="'plan-new-friend-' + friend.userId"
                   @change="toggle(friend.userId)"
                 />
-                <UserAvatar :name="friend.displayName" :user-id="friend.userId" :avatar-url="friend.avatarUrl" />
-                <span class="grow">
-                  <span class="friend__name">{{ friend.displayName }}</span>
-                  <span v-if="friend.city" class="small muted friend__city">{{ friend.city }}</span>
+                <UserAvatar
+                  :name="friend.displayName"
+                  :user-id="friend.userId"
+                  :avatar-url="friend.avatarUrl"
+                  :size="32"
+                />
+                <span class="hg-row__text">
+                  <span class="hg-row__title">{{ friend.displayName }}</span>
+                  <span v-if="friend.city" class="hg-row__sub">{{ friend.city }}</span>
                 </span>
               </label>
+            </div>
+
+            <p class="new__hint new__hint--below" data-tst-id="plan-new-link-hint">
+              <template v-if="form.visibility === 'PUBLIC'">
+                Shown in the feed: anyone can join and enters the group chat, and you can remove a guest.
+                <template v-if="friends.length > 0">Friends you tick get the invitation directly.</template>
+              </template>
+              <template v-else-if="friends.length === 0">
+                You have no friends here yet. After creating the plan you will get a link to send to
+                anyone.
+              </template>
+              <template v-else>You will also get a link to send to anyone.</template>
+            </p>
+          </section>
+
+          <!-- One block for every error, from the form or from the server; a pair of fields the
+               error is about is also outlined in red. -->
+          <p v-if="error !== ''" class="app-error" role="alert" data-tst-id="plan-new-error">{{ error }}</p>
+
+          <div class="new__actions">
+            <button
+              class="hg-btn hg-btn--primary new__send"
+              :class="{ 'is-loading': busy }"
+              type="submit"
+              :disabled="!canSend"
+              data-tst-id="plan-new-send"
+            >
+              <span>{{ sendLabel }}</span>
+            </button>
+            <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'plans' }">Cancel</RouterLink>
+          </div>
+        </template>
+
+        <div v-else class="new__actions">
+          <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'plans' }">Cancel</RouterLink>
+        </div>
+      </form>
+
+      <!-- The invitation as a guest will see it. A picture only: nothing in it can be pressed. -->
+      <aside v-if="chosen !== null" class="new__preview" aria-label="Preview of the invitation">
+        <p class="new__preview-caption">This is what they will see.</p>
+
+        <div class="hg-card new__preview-card">
+          <div class="app-row">
+            <UserAvatar :name="myName" :avatar-url="auth.state.profile?.avatarUrl" />
+            <p>
+              <b>{{ myName }}</b> invites you
+            </p>
+          </div>
+
+          <span class="hg-plan__kind">
+            <EventTypeIcon :type="chosen" :size="16" />
+            {{ EVENT_TYPE_LOOK[chosen].label }}
+          </span>
+
+          <h2 class="new__preview-title">{{ form.title === '' ? EVENT_TYPE_LOOK[chosen].label : form.title }}</h2>
+
+          <p v-if="form.description.trim() !== ''" class="hg-plan__note new__preview-note">
+            {{ form.description.trim() }}
+          </p>
+
+          <ul class="hg-plan__facts new__preview-facts">
+            <li v-for="(time, index) in previewTimes" :key="index" class="hg-plan__fact">
+              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              {{ time }}
+            </li>
+            <li v-if="previewTimes.length === 0" class="hg-plan__fact">
+              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              Time to be agreed
+            </li>
+            <li class="hg-plan__fact">
+              <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              {{ distanceRange(form.distanceMinMi, form.distanceMaxMi) }}
+            </li>
+            <li class="hg-plan__fact">
+              <Wallet class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              {{ priceRange(form.priceMin, form.priceMax) }}
             </li>
           </ul>
-        </section>
 
-        <p v-if="error !== ''" class="form-error" role="alert" data-tst-id="plan-new-error">{{ error }}</p>
-
-        <div class="new__send">
-          <p class="small muted">
-            {{
-              form.visibility === 'PUBLIC'
-                ? 'It appears in the feed for everybody. A group chat is created for everyone who joins.'
-                : form.inviteeIds.length === 0
-                  ? 'You will get a link to share. A chat is created for everyone who joins.'
-                  : 'A group chat with ' +
-                    form.inviteeIds.length +
-                    (form.inviteeIds.length === 1 ? ' friend' : ' friends') +
-                    ' will be created. You also get a link for others.'
-            }}
-          </p>
-          <button class="btn btn--big" type="submit" :disabled="!canSend" data-tst-id="plan-new-send">
-            {{
-              busy
-                ? 'Creating…'
-                : form.visibility === 'PUBLIC'
-                  ? 'Post to the feed'
-                  : form.inviteeIds.length === 0
-                    ? 'Create and get the link'
-                    : 'Send invitation'
-            }}
-          </button>
+          <span class="hg-btn hg-btn--primary hg-btn--block new__preview-button" aria-hidden="true">
+            I'm coming
+          </span>
         </div>
-      </template>
-    </form>
-  </main>
+      </aside>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+/* The form and, beside it, the preview. The form never grows wider than a comfortable line. */
 .new {
-  gap: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-7);
 }
 
+.new__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  min-width: 0;
+}
+
+.new__title {
+  margin-bottom: var(--s-3);
+  font: var(--t-title-3);
+}
+
+.new__title--tight {
+  margin-bottom: var(--s-1);
+}
+
+.new__hint {
+  font: var(--t-small);
+  color: var(--c-ink-soft);
+}
+
+.new__hint--above {
+  margin-bottom: var(--s-3);
+}
+
+.new__hint--below {
+  margin-top: var(--s-3);
+}
+
+/* ---- the activity tiles ---- */
 .new__types {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
 }
 
-.type {
+.new__type {
   display: grid;
+  place-content: center;
   justify-items: center;
-  gap: 6px;
-  padding: 16px 8px;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-m);
-  background: var(--c-surface);
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
-}
-
-.type:hover {
-  border-color: color-mix(in srgb, var(--c-accent) 50%, var(--c-line));
-  transform: translateY(-1px);
-}
-
-.type--chosen,
-.type--chosen:hover {
-  border-color: var(--c-accent);
-  background: var(--c-accent-soft);
-  box-shadow: 0 0 0 2px var(--c-accent);
-}
-
-.type__icon {
-  font-size: 1.8rem;
-  line-height: 1;
-}
-
-.type__label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: center;
-}
-
-.new__card-title {
-  margin-bottom: 0;
-}
-
-.new__prefilled {
-  margin-top: -8px;
-}
-
-.new__pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.new__range {
-  display: grid;
-  gap: 6px;
+  gap: var(--s-1);
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  height: 72px;
+  padding: 0 var(--s-2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font: var(--t-body-strong);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
 }
 
-.new__range-inputs {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 8px;
+.new__type:hover {
+  border-color: var(--c-ink-faint);
 }
 
+.new__type[aria-pressed='true'] {
+  border-color: var(--c-ink);
+  background: var(--c-ink);
+  color: var(--c-on-ink);
+}
+
+.new__type-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- dates ---- */
 .new__time {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
 }
 
-.new__time-remove {
+.new__time-add {
+  margin-top: var(--s-2);
+}
+
+/* ---- distance and budget ---- */
+.new__pair {
   display: grid;
-  flex: none;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--c-ink-faint);
-  cursor: pointer;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
 }
 
-.new__time-remove:hover {
-  background: var(--c-danger-soft);
-  color: var(--c-danger);
-}
-
-.new__who {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.who-option {
+.new__range {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-m);
-  cursor: pointer;
+  align-items: center;
+  gap: var(--s-2);
 }
 
-.who-option:hover {
-  border-color: color-mix(in srgb, var(--c-accent) 50%, var(--c-line));
-}
-
-.who-option--on,
-.who-option--on:hover {
-  border-color: var(--c-accent);
-  background: var(--c-accent-soft);
-}
-
-.who-option__radio {
-  margin-top: 3px;
-  accent-color: var(--c-accent);
-}
-
-.who-option__title {
-  display: block;
-  font-weight: 700;
-}
-
-.who-option__text {
-  display: block;
-}
-
-@media (max-width: 560px) {
-  .new__who {
-    grid-template-columns: 1fr;
-  }
-}
-
-.new__who-hint {
-  margin: 10px 0;
+/* ---- who ---- */
+.new__seg {
+  max-width: 100%;
 }
 
 .new__friends {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  margin-top: var(--s-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  overflow: hidden;
 }
 
-.friend {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-s);
-  cursor: pointer;
-}
-
-.friend:hover {
-  background: var(--c-surface-soft);
-}
-
-.friend--picked,
-.friend--picked:hover {
-  border-color: color-mix(in srgb, var(--c-teal) 50%, transparent);
-  background: var(--c-teal-soft);
-}
-
-.friend__box {
+.new__check {
+  flex: none;
   width: 20px;
   height: 20px;
-  accent-color: var(--c-teal);
+  accent-color: var(--c-accent);
 }
 
-.friend__name {
-  display: block;
-  font-weight: 600;
+.new__actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+/* ---- the preview ---- */
+.new__preview {
+  position: sticky;
+  top: var(--s-6);
+  min-width: 0;
+  max-width: 400px;
+}
+
+.new__preview-caption {
+  margin-bottom: var(--s-3);
+  font: var(--t-caption);
+  color: var(--c-ink-soft);
+}
+
+.new__preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  border-radius: var(--r-l);
+}
+
+.new__preview-title {
+  font: var(--t-title-2);
   overflow-wrap: anywhere;
 }
 
-.friend__city {
-  display: block;
+/* The note keeps the line breaks the author typed. */
+.new__preview-note {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
-.new__send {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.new__preview-facts {
+  font: var(--t-small);
+}
+
+/* It only looks like a button: the preview is a picture. */
+.new__preview-button {
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (max-width: 1279px) {
+  .new {
+    gap: var(--s-6);
+  }
+}
+
+/* Below 1024 there is no room beside the form: one column, no preview. */
+@media (max-width: 1023px) {
+  .new {
+    grid-template-columns: minmax(0, 560px);
+  }
+
+  .new__preview {
+    display: none;
+  }
 }
 
 @media (max-width: 560px) {
   .new__pair {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4);
+  }
+
+  .new__seg {
+    display: flex;
+  }
+
+  .new__seg .hg-seg__opt {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 var(--s-2);
+  }
+
+  .new__actions {
+    flex-direction: column;
+  }
+
+  .new__send {
+    width: 100%;
   }
 }
 </style>

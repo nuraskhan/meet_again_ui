@@ -6,8 +6,8 @@ import { api } from '@/api'
 import { configureHttp } from '@/api/http'
 import type { AuthResponse, MyProfile } from '@/api/types'
 
-const TOKEN_KEY = 'meet_again.token'
-const USER_ID_KEY = 'meet_again.userId'
+const TOKEN_KEY = 'hangelo.token'
+const USER_ID_KEY = 'hangelo.userId'
 
 interface AuthState {
   token: string | null

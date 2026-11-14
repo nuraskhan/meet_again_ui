@@ -1,15 +1,18 @@
 <script setup lang="ts">
-// One chat. A new message arrives by signal the moment it is written (see stores/signal.ts).
+// One chat: the right pane of views/ChatsView.vue, the whole screen on a phone.
+// A new message arrives by signal the moment it is written (see stores/signal.ts).
 // The newest page is also fetched now and then, and whenever the signal stream comes back after a
 // break: a signal can be lost, the message must not be.
+// The messages are shown by day, and inside a day in runs: what one person wrote in a row stands
+// under their name once, with the time under the last of it.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ArrowDown, ArrowLeft, ArrowUp, MessageCircle } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { Chat, ChatMember, ChatMessage, ChatMessageSignal } from '@/api/types'
 import { onSignal, RECONNECTED } from '@/stores/signal'
 import UserAvatar from '@/components/UserAvatar.vue'
-import { messageTime } from '@/lib/format'
 import { auth } from '@/stores/auth'
 import { toastError } from '@/stores/toast'
 
@@ -19,6 +22,27 @@ const props = defineProps<{ chatId: number }>()
 const POLL_EVERY_MS = 30000
 /** The size of a page the server returns by default. A full page means there may be older ones. */
 const PAGE_SIZE = 50
+/** How many faces the header shows before "+N". */
+const FACES = 3
+
+/** What one person wrote in a row, within one day. */
+interface Run {
+  /** The id of its first message. */
+  key: number
+  authorId: number
+  authorName: string
+  mine: boolean
+  messages: ChatMessage[]
+  /** The moment of its last message. */
+  endedAt: string
+}
+
+interface Day {
+  /** The local date, "2026-10-13". */
+  key: string
+  label: string
+  runs: Run[]
+}
 
 const chat = ref<Chat | null>(null)
 const members = ref<ChatMember[]>([])
@@ -32,10 +56,59 @@ const loadingOlder = ref<boolean>(false)
 const draft = ref<string>('')
 const sending = ref<boolean>(false)
 
+/** How many messages of others arrived while the reader was looking at older ones. */
+const unseen = ref<number>(0)
+
 const list = ref<HTMLElement | null>(null)
 let timer: number | undefined
 
 const memberNames = computed<string>(() => members.value.map((member) => member.displayName).join(', '))
+
+/** A message carries the name of its author but not the picture: that comes from the members. */
+const avatarUrls = computed<Map<number, string | null>>(
+  () => new Map(members.value.map((member) => [member.userId, member.avatarUrl])),
+)
+
+// The interface is in English, so dates are too - whatever the language of the browser.
+const LOCALE = 'en-GB'
+const timeFormat = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' })
+const dayFormat = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' })
+const dayYearFormat = new Intl.DateTimeFormat(LOCALE, {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+/** The messages by day and by run. A new day or another author starts a new run. */
+const days = computed<Day[]>(() => {
+  const now = new Date()
+  const result: Day[] = []
+  for (const message of messages.value) {
+    const moment = new Date(message.createdAt)
+    const key: string = dayKey(moment)
+    let day: Day | undefined = result[result.length - 1]
+    if (day === undefined || day.key !== key) {
+      day = { key, label: dayLabel(moment, now), runs: [] }
+      result.push(day)
+    }
+    let run: Run | undefined = day.runs[day.runs.length - 1]
+    if (run === undefined || run.authorId !== message.authorId) {
+      run = {
+        key: message.id,
+        authorId: message.authorId,
+        authorName: message.authorName,
+        mine: isMine(message),
+        messages: [],
+        endedAt: message.createdAt,
+      }
+      day.runs.push(run)
+    }
+    run.messages.push(message)
+    run.endedAt = message.createdAt
+  }
+  return result
+})
 
 onMounted(async () => {
   try {
@@ -48,7 +121,6 @@ onMounted(async () => {
     members.value = memberList
     messages.value = page.slice().reverse()
     hasOlder.value = page.length === PAGE_SIZE
-    await scrollToEnd()
 
     timer = window.setInterval(poll, POLL_EVERY_MS)
   } catch (caught) {
@@ -60,6 +132,8 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  // After "loading" is off: the list of messages is in the page only from then on.
+  await scrollToEnd()
 })
 
 const stopListening: (() => void)[] = [
@@ -100,11 +174,14 @@ async function addNew(newestFirst: ChatMessage[]): Promise<void> {
     return
   }
 
-  // Follow the conversation only if the reader is already at the end of it.
+  // Follow the conversation only if the reader is already at the end of it. Otherwise say that
+  // there is something new below, and leave them where they are.
   const atEnd: boolean = isAtEnd()
   messages.value.push(...fresh)
   if (atEnd) {
     await scrollToEnd()
+  } else {
+    unseen.value += fresh.filter((message) => !isMine(message)).length
   }
 }
 
@@ -173,253 +250,341 @@ async function scrollToEnd(): Promise<void> {
   if (element !== null) {
     element.scrollTop = element.scrollHeight
   }
+  unseen.value = 0
+}
+
+/** The reader came back to the end by themselves: nothing is unseen any more. */
+function onScroll(): void {
+  if (unseen.value > 0 && isAtEnd()) {
+    unseen.value = 0
+  }
 }
 
 function isMine(message: ChatMessage): boolean {
   return message.authorId === auth.state.userId
 }
 
-/** The author's name is shown once per run of their messages, not on every bubble. */
-function startsRun(index: number): boolean {
-  return index === 0 || messages.value[index - 1]?.authorId !== messages.value[index]?.authorId
+/** The calendar day of a moment where the reader is, not in UTC. */
+function dayKey(moment: Date): string {
+  return moment.getFullYear() + '-' + (moment.getMonth() + 1) + '-' + moment.getDate()
+}
+
+function dayLabel(moment: Date, now: Date): string {
+  if (dayKey(moment) === dayKey(now)) {
+    return 'Today'
+  }
+  // The day before by the calendar, not "24 hours ago": correct across a change of the clocks.
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  if (dayKey(moment) === dayKey(yesterday)) {
+    return 'Yesterday'
+  }
+  return moment.getFullYear() === now.getFullYear() ? dayFormat.format(moment) : dayYearFormat.format(moment)
+}
+
+/** The day is in the divider above, so a run needs the time only. */
+function time(iso: string): string {
+  return timeFormat.format(new Date(iso))
 }
 </script>
 
 <template>
-  <main class="chat">
+  <div class="chat">
     <header class="chat__head">
-      <RouterLink class="chat__back" :to="{ name: 'chats' }" aria-label="All chats">←</RouterLink>
-      <div class="grow">
-        <h1 class="chat__title">{{ chat?.title ?? 'Chat' }}</h1>
-        <p v-if="memberNames !== ''" class="small muted chat__members">{{ memberNames }}</p>
+      <RouterLink class="hg-iconbtn chat__back" :to="{ name: 'chats' }" aria-label="All chats">
+        <ArrowLeft class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+      </RouterLink>
+      <div class="app-grow">
+        <h2 class="chat__title">{{ chat?.title ?? 'Chat' }}</h2>
+        <p v-if="memberNames !== ''" class="chat__members">{{ memberNames }}</p>
       </div>
+      <span v-if="members.length > 0" class="hg-stack chat__faces" aria-hidden="true">
+        <UserAvatar
+          v-for="member in members.slice(0, FACES)"
+          :key="member.userId"
+          :name="member.displayName"
+          :user-id="member.userId"
+          :avatar-url="member.avatarUrl"
+          :size="32"
+        />
+        <span v-if="members.length > FACES" class="hg-avatar hg-avatar--32 hg-stack__more">
+          +{{ members.length - FACES }}
+        </span>
+      </span>
     </header>
 
-    <p v-if="loading" class="muted chat__state">Loading…</p>
+    <!-- Loading: the shape of a conversation, so the pane does not jump when it arrives. -->
+    <div v-if="loading" class="chat__loading" aria-busy="true" aria-label="Loading messages">
+      <span class="hg-skel chat__skel chat__skel--wide"></span>
+      <span class="hg-skel chat__skel"></span>
+      <span class="hg-skel chat__skel chat__skel--own"></span>
+      <span class="hg-skel chat__skel chat__skel--wide"></span>
+    </div>
 
-    <div v-else-if="missing" class="empty chat__state" data-tst-id="chat-missing">
-      <p>This chat does not exist, or you are no longer in it.</p>
+    <div v-else-if="missing" class="chat__state">
+      <div class="hg-empty" data-tst-id="chat-missing">
+        <MessageCircle class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <h3 class="hg-empty__title">No such chat</h3>
+        <p class="hg-empty__text">This chat does not exist, or you are no longer in it.</p>
+      </div>
     </div>
 
     <template v-else>
-      <div ref="list" class="chat__list" data-tst-id="chat-messages">
-        <button
-          v-if="hasOlder"
-          class="btn btn--ghost btn--small chat__older"
-          type="button"
-          :disabled="loadingOlder"
-          @click="loadOlder"
-        >
-          {{ loadingOlder ? 'Loading…' : 'Earlier messages' }}
-        </button>
-
-        <p v-if="messages.length === 0" class="muted chat__hello" data-tst-id="chat-empty">
-          Nobody has written yet. Say hi 👋
-        </p>
-
+      <div class="chat__body">
         <div
-          v-for="(message, index) in messages"
-          :key="message.id"
-          class="message"
-          :class="{ 'message--mine': isMine(message), 'message--run': startsRun(index) }"
-          data-tst-id="chat-message"
+          ref="list"
+          class="hg-chat chat__list"
+          role="log"
+          aria-label="Messages"
+          data-tst-id="chat-messages"
+          @scroll.passive="onScroll"
         >
-          <span class="message__avatar">
-            <UserAvatar
-              v-if="!isMine(message) && startsRun(index)"
-              :name="message.authorName"
-              :user-id="message.authorId"
-              :size="32"
-            />
-          </span>
-
-          <div class="message__body">
-            <span v-if="!isMine(message) && startsRun(index)" class="message__author">
-              {{ message.authorName }}
-            </span>
-            <div class="message__bubble">
-              <span class="message__text">{{ message.text }}</span>
-              <time class="message__time" :datetime="message.createdAt">{{ messageTime(message.createdAt) }}</time>
-            </div>
+          <div v-if="hasOlder" class="chat__older">
+            <button
+              class="hg-btn hg-btn--quiet hg-btn--sm"
+              :class="{ 'is-loading': loadingOlder }"
+              type="button"
+              :disabled="loadingOlder"
+              @click="loadOlder"
+            >
+              <span>Earlier messages</span>
+            </button>
           </div>
+
+          <div v-if="messages.length === 0" class="hg-empty chat__hello" data-tst-id="chat-empty">
+            <MessageCircle class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+            <h3 class="hg-empty__title">Nobody has written yet</h3>
+            <p class="hg-empty__text">Say hi.</p>
+          </div>
+
+          <template v-for="day in days" :key="day.key">
+            <span class="hg-daydiv">{{ day.label }}</span>
+
+            <div v-for="run in day.runs" :key="run.key" class="hg-run" :class="{ 'hg-run--own': run.mine }">
+              <UserAvatar
+                v-if="!run.mine"
+                :name="run.authorName"
+                :user-id="run.authorId"
+                :avatar-url="avatarUrls.get(run.authorId)"
+                :size="32"
+              />
+              <div class="hg-run__body">
+                <p v-if="!run.mine" class="hg-run__name">{{ run.authorName }}</p>
+                <!-- On one line: the bubble keeps the line breaks of the text, and would keep
+                     the ones of this template too. -->
+                <p
+                  v-for="(message, index) in run.messages"
+                  :key="message.id"
+                  class="hg-bubble chat__bubble"
+                  :class="{ 'hg-bubble--own': run.mine, 'hg-bubble--first': index === 0 }"
+                  data-tst-id="chat-message"
+                >{{ message.text }}</p>
+                <time class="hg-run__time" :datetime="run.endedAt">{{ time(run.endedAt) }}</time>
+              </div>
+            </div>
+          </template>
         </div>
+
+        <button v-if="unseen > 0" class="hg-newpill chat__new" type="button" @click="scrollToEnd">
+          <ArrowDown class="hg-icon chat__new-icon" :stroke-width="1.5" aria-hidden="true" />
+          New messages
+        </button>
       </div>
 
       <form class="chat__form" data-tst-id="chat-form" @submit.prevent="send">
-        <textarea
-          v-model="draft"
-          class="input chat__input"
-          rows="1"
-          maxlength="4000"
-          placeholder="Write a message"
-          aria-label="Write a message"
-          data-tst-id="chat-input"
-          @keydown="onKey"
-        ></textarea>
-        <button
-          class="btn"
-          type="submit"
-          :disabled="sending || draft.trim() === ''"
-          data-tst-id="chat-send"
-        >
-          Send
-        </button>
+        <div class="hg-composer">
+          <textarea
+            v-model="draft"
+            class="hg-textarea chat__input"
+            rows="1"
+            maxlength="4000"
+            placeholder="Write a message"
+            aria-label="Write a message"
+            data-tst-id="chat-input"
+            @keydown="onKey"
+          ></textarea>
+          <button
+            class="hg-iconbtn hg-iconbtn--primary"
+            type="submit"
+            :disabled="sending || draft.trim() === ''"
+            aria-label="Send message"
+            title="Send message"
+            data-tst-id="chat-send"
+          >
+            <ArrowUp class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+          </button>
+        </div>
+        <p class="chat__hint">Enter sends. Shift+Enter makes a new line.</p>
       </form>
     </template>
-  </main>
+  </div>
 </template>
 
 <style scoped>
-/* The chat fills the screen under the top bar (60px + its border): the list scrolls, the form stays. */
+/* Fills the pane ChatsView gives it (that one computes the height of the screen): the head and
+   the form keep their place, the messages scroll between them. */
 .chat {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
-  width: 100%;
-  max-width: 880px;
-  height: calc(100dvh - 61px);
-  margin: 0 auto;
-  padding: 0 16px;
+  min-width: 0;
+  min-height: 0;
 }
 
 .chat__head {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 12px;
-  padding: 14px 0;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
   border-bottom: 1px solid var(--c-line);
 }
 
+/* The way back to the list: only where the list is not on the screen (a phone). */
 .chat__back {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  color: var(--c-ink);
-  font-size: 1.2rem;
-}
-
-.chat__back:hover {
-  background: var(--c-surface-soft);
+  display: none;
 }
 
 .chat__title {
-  font-size: 1.15rem;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  font: var(--t-title-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat__members {
   overflow: hidden;
+  color: var(--c-ink-soft);
+  font: var(--t-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .chat__state {
-  margin-top: 24px;
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.chat__loading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+}
+
+.chat__skel {
+  width: 30%;
+  height: var(--size-control);
+  border-radius: var(--r-l);
+}
+
+.chat__skel--wide {
+  width: 55%;
+}
+
+.chat__skel--own {
+  align-self: flex-end;
+}
+
+/* Holds the scrolling list and, over its bottom edge, the "New messages" pill. */
+.chat__body {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .chat__list {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 4px;
+  flex: 1 1 0;
   min-height: 0;
-  padding: 16px 0;
+  padding: var(--s-4) var(--s-5);
   overflow-y: auto;
 }
 
-/* A short conversation sits at the bottom, next to the field where the next message is typed. */
+/* A short conversation sits at the bottom, next to the field where the next message is typed.
+   (Not "justify-content: flex-end": that would put the top of a long one out of reach.) */
 .chat__list > :first-child {
   margin-top: auto;
 }
 
 .chat__older {
-  align-self: center;
-  margin-bottom: 8px;
+  display: flex;
+  flex: none;
+  justify-content: center;
 }
 
 .chat__hello {
-  margin: auto;
-  text-align: center;
+  margin-bottom: auto;
 }
 
-.message {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  max-width: 82%;
-}
-
-.message--run {
-  margin-top: 10px;
-}
-
-.message--mine {
-  align-self: flex-end;
-}
-
-.message__avatar {
-  flex: none;
-  width: 32px;
-  align-self: flex-start;
-}
-
-.message--mine .message__avatar {
-  display: none;
-}
-
-.message__body {
-  min-width: 0;
-}
-
-.message__author {
-  display: block;
-  margin: 0 0 2px 12px;
-  color: var(--c-ink-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.message__bubble {
-  padding: 8px 14px;
-  border: 1px solid var(--c-line);
-  border-radius: 18px;
-  background: var(--c-surface);
-}
-
-.message--mine .message__bubble {
-  border-color: transparent;
-  background: var(--c-teal);
-  color: var(--c-on-teal);
-}
-
-.message__text {
+/* A message keeps the line breaks it was written with (Shift+Enter). */
+.chat__bubble {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
-.message__time {
-  margin-left: 10px;
-  opacity: 0.65;
-  font-size: 0.72rem;
-  white-space: nowrap;
+.chat__new {
+  position: absolute;
+  bottom: var(--s-3);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.chat__new-icon {
+  width: var(--s-4);
+  height: var(--s-4);
 }
 
 .chat__form {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 12px 0 16px;
+  flex: none;
+  padding: var(--s-3) var(--s-5) var(--s-4);
   border-top: 1px solid var(--c-line);
 }
 
-.chat__input {
+/* Grows with the text up to a few lines, where the browser can; two classes, to win over
+   ".hg-composer .hg-textarea" which fixes the height. */
+.chat__form .chat__input {
   flex: 1 1 auto;
-  min-height: 46px;
-  max-height: 140px;
-  border-radius: 23px;
-  resize: none;
+  height: auto;
+  max-height: calc(var(--s-8) * 2);
   field-sizing: content;
+}
+
+.chat__hint {
+  margin-top: var(--s-2);
+  color: var(--c-ink-soft);
+  font: var(--t-caption);
+}
+
+@media (max-width: 767px) {
+  .chat__head {
+    gap: var(--s-2);
+    padding: var(--s-2) var(--s-4) var(--s-2) var(--s-2);
+  }
+
+  .chat__back {
+    display: inline-grid;
+  }
+
+  /* The names under the title say who is here; the faces would squeeze the title. */
+  .chat__faces {
+    display: none;
+  }
+
+  .chat__list,
+  .chat__loading {
+    padding: var(--s-3) var(--s-4);
+  }
+
+  .chat__form {
+    padding: var(--s-2) var(--s-4) calc(var(--s-2) + env(safe-area-inset-bottom));
+  }
+
+  /* No Shift key on a phone's keyboard, and the room is better spent on messages. */
+  .chat__hint {
+    display: none;
+  }
 }
 </style>

@@ -3,8 +3,10 @@
 // what came of it. Works logged in or not: the letter may be opened on another device.
 
 import { onMounted, ref } from 'vue'
+import { Check, Mail, X } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import { api } from '@/api'
+import HangeloLogo from '@/components/HangeloLogo.vue'
 import { auth } from '@/stores/auth'
 import { errorText } from '@/stores/toast'
 
@@ -35,89 +37,133 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="verify-page">
-    <RouterLink class="verify-page__logo" :to="{ name: auth.isLoggedIn.value ? 'plans' : 'welcome' }">
-      meet again
-    </RouterLink>
+  <div class="app-bare">
+    <header class="app-bare__top verify-page__top">
+      <RouterLink
+        class="verify-page__logo"
+        :to="{ name: auth.isLoggedIn.value ? 'plans' : 'welcome' }"
+        aria-label="Hangelo"
+      >
+        <HangeloLogo />
+      </RouterLink>
+    </header>
 
-    <div class="card verify-page__card" data-tst-id="verify-email">
-      <template v-if="state === 'checking'">
-        <h1 class="verify-page__title">Confirming your e-mail…</h1>
-      </template>
+    <main class="verify-page__main">
+      <div class="verify-page__box" data-tst-id="verify-email">
+        <template v-if="state === 'checking'">
+          <span class="verify-page__mark">
+            <Mail class="hg-icon hg-icon--48" :stroke-width="1.5" aria-hidden="true" />
+          </span>
+          <h1 class="verify-page__title" role="status">Confirming your e-mail…</h1>
+        </template>
 
-      <template v-else-if="state === 'confirmed'">
-        <p class="verify-page__mark" aria-hidden="true">✓</p>
-        <h1 class="verify-page__title" data-tst-id="verify-email-ok">Your e-mail is confirmed</h1>
-        <p class="muted">We will remind you about your plans a day before they happen.</p>
-        <RouterLink class="btn verify-page__button" :to="{ name: auth.isLoggedIn.value ? 'plans' : 'login' }">
-          {{ auth.isLoggedIn.value ? 'Go to my plans' : 'Log in' }}
-        </RouterLink>
-      </template>
+        <template v-else-if="state === 'confirmed'">
+          <span class="verify-page__mark verify-page__mark--ok">
+            <Check class="hg-icon hg-icon--48" :stroke-width="1.5" aria-hidden="true" />
+          </span>
+          <h1 class="verify-page__title" data-tst-id="verify-email-ok">Your e-mail is confirmed</h1>
+          <p class="verify-page__text">You will get reminders about your plans.</p>
+          <RouterLink
+            class="hg-btn hg-btn--primary verify-page__button"
+            :to="{ name: auth.isLoggedIn.value ? 'plans' : 'login' }"
+          >
+            {{ auth.isLoggedIn.value ? 'Go to my plans' : 'Log in' }}
+          </RouterLink>
+        </template>
 
-      <template v-else>
-        <h1 class="verify-page__title" data-tst-id="verify-email-failed">That did not work</h1>
-        <p class="muted">{{ failure }}</p>
-        <p class="muted verify-page__hint">
-          Log in and press "Send it again" at the top of the page to get a fresh link.
-        </p>
-        <RouterLink class="btn verify-page__button" :to="{ name: auth.isLoggedIn.value ? 'plans' : 'login' }">
-          {{ auth.isLoggedIn.value ? 'Go to my plans' : 'Log in' }}
-        </RouterLink>
-      </template>
-    </div>
+        <template v-else>
+          <span class="verify-page__mark verify-page__mark--failed">
+            <X class="hg-icon hg-icon--48" :stroke-width="1.5" aria-hidden="true" />
+          </span>
+          <h1 class="verify-page__title" data-tst-id="verify-email-failed">That did not work</h1>
+          <p class="verify-page__text">{{ failure }}</p>
+          <p class="verify-page__text">
+            Log in and press "Send again" at the top of the page to get a fresh link.
+          </p>
+          <RouterLink
+            class="hg-btn hg-btn--primary verify-page__button"
+            :to="{ name: auth.isLoggedIn.value ? 'plans' : 'login' }"
+          >
+            {{ auth.isLoggedIn.value ? 'Go to my plans' : 'Log in' }}
+          </RouterLink>
+        </template>
+      </div>
+    </main>
   </div>
 </template>
 
 <style scoped>
-.verify-page {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 22px;
-  min-height: 100vh;
-  padding: 32px 16px;
+.verify-page__top {
+  padding: var(--s-5) var(--s-7);
 }
 
 .verify-page__logo {
+  display: inline-flex;
   color: var(--c-ink);
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
-.verify-page__card {
-  width: 100%;
-  max-width: 440px;
-  padding: 30px;
+.verify-page__main {
+  display: flex;
+  justify-content: center;
+  padding: calc(var(--s-8) + var(--s-7)) var(--s-4);
+}
+
+.verify-page__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  width: 440px;
+  max-width: 100%;
   text-align: center;
 }
 
 .verify-page__mark {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  background: var(--c-teal-soft);
-  color: var(--c-teal);
-  font-size: 1.6rem;
-  font-weight: 700;
+  width: 96px;
+  height: 96px;
+  border-radius: var(--r-full);
+  background: var(--c-surface-soft);
+  color: var(--c-ink-soft);
+}
+
+.verify-page__mark--ok {
+  background: var(--c-success-soft);
+  color: var(--c-success);
+}
+
+.verify-page__mark--failed {
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
 }
 
 .verify-page__title {
-  margin-bottom: 8px;
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  font-weight: 600;
+  margin-top: var(--s-2);
+  font: var(--t-title-1);
+  letter-spacing: -0.015em;
 }
 
-.verify-page__hint {
-  margin-top: 8px;
+.verify-page__text {
+  color: var(--c-ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .verify-page__button {
-  margin-top: 20px;
+  margin-top: var(--s-4);
+}
+
+@media (max-width: 767px) {
+  .verify-page__top {
+    padding: var(--s-4);
+  }
+
+  .verify-page__main {
+    padding: var(--s-7) var(--s-4);
+  }
+
+  .verify-page__button {
+    width: 100%;
+  }
 }
 </style>

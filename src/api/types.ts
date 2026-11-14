@@ -1,5 +1,5 @@
 // The shapes the server sends and accepts. They mirror the DTO records of the backend
-// (applications/magain/magain-mod/*/dto). Moments are ISO strings in UTC, e.g. 2030-01-01T02:30:00Z.
+// (applications/hangelo/hangelo-mod/*/dto). Moments are ISO strings in UTC, e.g. 2030-01-01T02:30:00Z.
 
 export interface AuthResponse {
   token: string

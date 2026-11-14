@@ -1,535 +1,421 @@
 <script setup lang="ts">
 // The page a visitor sees first. No data from the server: it only explains and invites to register.
 
-import type { EventTypeCode } from '@/api/types'
-import { EVENT_TYPE_LOOK } from '@/lib/format'
-
-const TYPES: EventTypeCode[] = ['BATH', 'FOOD', 'COFFEE', 'BAR', 'WALK', 'CINEMA', 'SPORT', 'BOARD_GAMES']
+import type { Component } from 'vue'
+import { Calendar, Clock, Compass, MapPin, MessageCircle, Star, Utensils, Wallet } from 'lucide-vue-next'
+import HangeloLogo from '@/components/HangeloLogo.vue'
 
 const STEPS: { title: string; text: string }[] = [
   {
-    title: 'Pick what to do',
-    text: 'Bathhouse, a bite, a walk. The form is already filled in with a sensible distance and budget - change what you want.',
+    title: 'Write a plan',
+    text: 'Pick what you want to do, a few dates, how far and how much. It takes a minute.',
   },
   {
-    title: 'Choose who is coming',
-    text: 'Tick one friend or ten. Each of them gets the same invitation and answers with one tap.',
+    title: 'Invite friends, or open it to everyone',
+    text: 'Choose people from your list, send a link, or let anyone join from the feed.',
   },
   {
-    title: 'Sort out the rest in the chat',
-    text: 'A group chat for exactly these people appears by itself. No "who has whose number".',
+    title: 'Agree on a time and a place',
+    text: "See who is coming, talk in the plan's chat, and pick from places that suit everyone.",
   },
 ]
+
+const FEATURES: { icon: Component; title: string; text: string }[] = [
+  {
+    icon: Calendar,
+    title: 'Several dates to choose from',
+    text: 'Offer a few times and let people say which works.',
+  },
+  {
+    icon: MessageCircle,
+    title: 'A group chat for every plan',
+    text: 'Created with the plan, for the details.',
+  },
+  {
+    icon: MapPin,
+    title: 'Places that suit everyone',
+    text: 'Suggestions based on where each guest is coming from.',
+  },
+  {
+    icon: Compass,
+    title: 'A public feed',
+    text: 'Join plans near you, or make yours open to anyone.',
+  },
+]
+
+const YEAR: number = new Date().getFullYear()
 </script>
 
 <template>
-  <div class="welcome">
-    <header class="welcome__bar">
-      <RouterLink class="logo" :to="{ name: 'welcome' }">
-        <span class="logo__mark" aria-hidden="true"></span>
-        meet again
-      </RouterLink>
+  <div class="app-bare">
+    <div class="welcome">
+      <header class="welcome__bar">
+        <RouterLink class="welcome__logo" :to="{ name: 'welcome' }" aria-label="Hangelo">
+          <HangeloLogo />
+        </RouterLink>
 
-      <nav class="row">
-        <RouterLink class="btn btn--ghost btn--small" :to="{ name: 'login' }" data-tst-id="welcome-login">
+        <span class="app-grow"></span>
+
+        <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'login' }" data-tst-id="welcome-login">
           Log in
         </RouterLink>
-        <RouterLink class="btn btn--small" :to="{ name: 'register' }" data-tst-id="welcome-register">
-          Get started
+        <RouterLink class="hg-btn hg-btn--neutral" :to="{ name: 'register' }" data-tst-id="welcome-register">
+          Create account
         </RouterLink>
-      </nav>
-    </header>
+      </header>
 
-    <main>
-      <!-- ------------------------------------------------------------ hero -->
-      <section class="hero">
-        <div class="hero__text">
-          <p class="hero__eyebrow">For friends who keep saying "we should hang out"</p>
-          <h1 class="hero__title">
-            Less planning.<br />
-            More <em>actually meeting</em>.
-          </h1>
-          <p class="hero__lead">
-            Send your friends a ready-made invitation - what, how far, how much - and get a group chat
-            with everyone who was invited. One minute, not forty messages.
-          </p>
+      <main>
+        <!-- ------------------------------------------------------------ hero -->
+        <section class="welcome__hero">
+          <div class="welcome__pitch">
+            <h1 class="welcome__title">See your friends in person, not just online</h1>
+            <p class="welcome__lead">
+              Write a plan, invite people, and agree on a time and a place with the fewest messages.
+            </p>
 
-          <div class="row hero__actions">
-            <RouterLink class="btn btn--big" :to="{ name: 'register' }" data-tst-id="welcome-cta">
-              Invite your friends
-            </RouterLink>
-            <RouterLink class="hero__secondary" :to="{ name: 'login' }">I already have an account</RouterLink>
+            <div class="welcome__actions">
+              <RouterLink
+                class="hg-btn hg-btn--primary hg-btn--lg welcome__cta"
+                :to="{ name: 'register' }"
+                data-tst-id="welcome-cta"
+              >
+                Create account
+              </RouterLink>
+              <RouterLink class="hg-link" :to="{ name: 'login' }">I already have an account</RouterLink>
+            </div>
           </div>
-        </div>
 
-        <!-- A picture of the product made of the product's own pieces; purely decorative. -->
-        <div class="hero__art" aria-hidden="true">
-          <div class="hero__sun"></div>
+          <!-- A picture of the product made of the product's own pieces; purely decorative.
+               The same picture stands beside the form in AuthView. -->
+          <div class="welcome__art-box" aria-hidden="true">
+            <div class="welcome__art">
+              <div class="hg-card hg-card--lg welcome__art-plan">
+                <div class="hg-plan hg-plan--compact">
+                  <span class="hg-plan__kind">
+                    <Utensils class="hg-icon" :stroke-width="1.5" />
+                    Dinner
+                  </span>
+                  <h3 class="hg-plan__title">Dinner on Friday</h3>
+                  <ul class="hg-plan__facts">
+                    <li class="hg-plan__fact"><Clock class="hg-icon" :stroke-width="1.5" />Fri, 20 Nov, 19:00</li>
+                    <li class="hg-plan__fact"><MapPin class="hg-icon" :stroke-width="1.5" />Up to 5 mi</li>
+                    <li class="hg-plan__fact"><Wallet class="hg-icon" :stroke-width="1.5" />$20–40</li>
+                  </ul>
+                </div>
+                <div class="welcome__art-people">
+                  <span class="hg-stack">
+                    <span class="hg-avatar hg-avatar--32">AZ</span>
+                    <span class="hg-avatar hg-avatar--32">TK</span>
+                    <span class="hg-avatar hg-avatar--32">AS</span>
+                    <span class="hg-avatar hg-avatar--32">DM</span>
+                    <span class="hg-avatar hg-avatar--32 hg-stack__more">+2</span>
+                  </span>
+                  <span>6 coming</span>
+                </div>
+              </div>
 
-          <div class="invite">
-            <div class="invite__head">
-              <span class="invite__icon">🧖</span>
-              <div>
-                <div class="invite__kind">Bathhouse</div>
-                <div class="invite__title">Saturday steam?</div>
+              <div class="hg-chat welcome__art-chat">
+                <div class="hg-run">
+                  <span class="hg-avatar hg-avatar--32">TK</span>
+                  <div class="hg-run__body">
+                    <p class="hg-run__name">Timur</p>
+                    <p class="hg-bubble hg-bubble--first">Navat at seven works for me.</p>
+                  </div>
+                </div>
+                <div class="hg-run hg-run--own">
+                  <div class="hg-run__body">
+                    <p class="hg-bubble hg-bubble--own hg-bubble--first">Booked, under my name.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hg-card hg-place welcome__art-place">
+                <h3 class="hg-place__name">Navat</h3>
+                <span class="hg-place__cat">
+                  Central Asian
+                  <span class="hg-place__rating"><Star class="hg-icon" :stroke-width="1.5" />4.6</span>
+                </span>
+                <span class="hg-place__dist"><MapPin class="hg-icon" :stroke-width="1.5" />2.4 mi from you</span>
               </div>
             </div>
-            <ul class="invite__facts">
-              <li>🗓 Sat, 18:00</li>
-              <li>📍 within 10 mi</li>
-              <li>💸 5 000 – 15 000 ₸</li>
-            </ul>
-            <div class="invite__people">
-              <span class="invite__face invite__face--a">A</span>
-              <span class="invite__face invite__face--b">B</span>
-              <span class="invite__face invite__face--c">C</span>
-              <span class="invite__going">2 of 3 are in</span>
-            </div>
-            <div class="invite__buttons">
-              <span class="invite__yes">I'm in</span>
-              <span class="invite__no">Can't</span>
-            </div>
           </div>
+        </section>
 
-          <div class="bubble bubble--left">Who is bringing the broom? 🌿</div>
-          <div class="bubble bubble--right">Me. See you at six!</div>
-        </div>
-      </section>
+        <!-- ------------------------------------------------------------ how it works -->
+        <section class="welcome__section">
+          <h2 class="welcome__heading">How it works</h2>
 
-      <!-- ------------------------------------------------------------ how it works -->
-      <section class="how">
-        <h2 class="welcome__heading">Three taps from "let's" to "see you there"</h2>
+          <ol class="welcome__steps">
+            <li v-for="(step, index) in STEPS" :key="step.title">
+              <div class="welcome__step-number hg-num" aria-hidden="true">{{ index + 1 }}</div>
+              <h3 class="welcome__item-title">{{ step.title }}</h3>
+              <p class="hg-soft">{{ step.text }}</p>
+            </li>
+          </ol>
+        </section>
 
-        <ol class="how__steps">
-          <li v-for="(step, index) in STEPS" :key="step.title" class="how__step">
-            <span class="how__number">{{ index + 1 }}</span>
-            <h3 class="how__title">{{ step.title }}</h3>
-            <p class="muted">{{ step.text }}</p>
-          </li>
-        </ol>
-      </section>
+        <!-- ------------------------------------------------------------ what you get -->
+        <section class="welcome__section">
+          <h2 class="welcome__heading">What you get</h2>
 
-      <!-- ------------------------------------------------------------ what for -->
-      <section class="kinds">
-        <h2 class="welcome__heading">Whatever you are in the mood for</h2>
-        <p class="muted kinds__lead">Each one comes with its own pre-filled invitation.</p>
+          <ul class="welcome__features">
+            <li v-for="feature in FEATURES" :key="feature.title" class="welcome__feature">
+              <component :is="feature.icon" class="hg-icon hg-icon--24" :stroke-width="1.5" aria-hidden="true" />
+              <h3 class="welcome__item-title">{{ feature.title }}</h3>
+              <p class="welcome__feature-text">{{ feature.text }}</p>
+            </li>
+          </ul>
+        </section>
 
-        <div class="kinds__list">
-          <span v-for="type in TYPES" :key="type" class="chip kinds__chip">
-            <span aria-hidden="true">{{ EVENT_TYPE_LOOK[type].icon }}</span>
-            {{ EVENT_TYPE_LOOK[type].label }}
-          </span>
-        </div>
-      </section>
+        <!-- ------------------------------------------------------------ closing -->
+        <section class="welcome__closing">
+          <h2 class="welcome__closing-title">Make the plan. Meet in person.</h2>
+          <RouterLink class="hg-btn hg-btn--neutral hg-btn--lg welcome__cta" :to="{ name: 'register' }">
+            Create account
+          </RouterLink>
+        </section>
+      </main>
 
-      <!-- ------------------------------------------------------------ closing -->
-      <section class="closing">
-        <h2 class="closing__title">Your friends are one invitation away.</h2>
-        <RouterLink class="btn btn--big closing__button" :to="{ name: 'register' }">
-          Create a free account
+      <footer class="welcome__footer">
+        <RouterLink class="welcome__logo" :to="{ name: 'welcome' }" aria-label="Hangelo">
+          <HangeloLogo />
         </RouterLink>
-      </section>
-    </main>
-
-    <footer class="welcome__footer">meet again · made for people who would rather meet than plan</footer>
+        <span class="hg-num">{{ YEAR }}</span>
+      </footer>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .welcome {
-  max-width: 1120px;
+  width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 var(--s-7);
   overflow-x: clip;
 }
 
 .welcome__bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 0;
+  gap: var(--s-2);
+  padding: var(--s-4) 0;
 }
 
-.logo {
+.welcome__logo {
   display: inline-flex;
-  align-items: center;
-  gap: 10px;
   color: var(--c-ink);
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.logo:hover {
-  color: var(--c-ink);
-}
-
-/* Two overlapping circles: two people meeting. */
-.logo__mark {
-  position: relative;
-  width: 30px;
-  height: 20px;
-}
-
-.logo__mark::before,
-.logo__mark::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-}
-
-.logo__mark::before {
-  left: 0;
-  background: var(--c-accent);
-}
-
-.logo__mark::after {
-  right: 0;
-  background: var(--c-teal);
-  mix-blend-mode: multiply;
-}
-
-@media (prefers-color-scheme: dark) {
-  .logo__mark::after {
-    mix-blend-mode: screen;
-  }
-}
-
-.welcome__heading {
-  font-family: var(--font-display);
-  font-size: clamp(1.6rem, 3.6vw, 2.3rem);
-  font-weight: 600;
-  text-align: center;
 }
 
 /* ---------------------------------------------------------------- hero */
 
-.hero {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  align-items: center;
-  gap: 40px;
-  padding: 48px 0 72px;
-}
-
-.hero__eyebrow {
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--c-accent-soft);
-  color: var(--c-accent);
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.hero__title {
-  margin-top: 18px;
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 6.4vw, 4.4rem);
-  font-weight: 600;
-  line-height: 1.04;
-  letter-spacing: -0.03em;
-}
-
-.hero__title em {
-  font-style: italic;
-  color: var(--c-accent);
-}
-
-.hero__lead {
-  max-width: 34em;
-  margin-top: 20px;
-  color: var(--c-ink-soft);
-  font-size: 1.15rem;
-}
-
-.hero__actions {
-  gap: 18px;
-  margin-top: 30px;
-}
-
-.hero__secondary {
-  color: var(--c-ink);
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: var(--c-line);
-  text-underline-offset: 4px;
-}
-
-.hero__art {
-  position: relative;
-  min-height: 470px;
-}
-
-.hero__sun {
-  position: absolute;
-  top: 6%;
-  right: 4%;
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--c-sun), var(--c-accent));
-  opacity: 0.9;
-}
-
-.invite {
-  position: absolute;
-  top: 40px;
-  left: 6%;
-  width: min(320px, 82%);
-  padding: 20px;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-l);
-  background: var(--c-surface);
-  box-shadow: var(--shadow-pop);
-  transform: rotate(-3deg);
-}
-
-.invite__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.invite__icon {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-m);
-  background: var(--c-accent-soft);
-  font-size: 1.5rem;
-}
-
-.invite__kind {
-  color: var(--c-accent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.invite__title {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.invite__facts {
-  display: grid;
-  gap: 6px;
-  margin: 16px 0;
-  padding: 0;
-  list-style: none;
-  color: var(--c-ink-soft);
-  font-size: 0.95rem;
-}
-
-.invite__people {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.invite__face {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  margin-right: -8px;
-  border: 2px solid var(--c-surface);
-  border-radius: 50%;
-  color: #ffffff; /* on a saturated face colour in both themes */
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.invite__face--a {
-  background: hsl(14 55% 42%);
-}
-
-.invite__face--b {
-  background: hsl(168 55% 32%);
-}
-
-.invite__face--c {
-  background: hsl(262 45% 48%);
-}
-
-.invite__going {
-  margin-left: 18px;
-  color: var(--c-ink-soft);
-  font-size: 0.85rem;
-}
-
-.invite__buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.invite__yes,
-.invite__no {
-  padding: 9px 0;
-  border-radius: 999px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-align: center;
-}
-
-.invite__yes {
-  background: var(--c-teal);
-  color: var(--c-on-teal);
-}
-
-.invite__no {
-  border: 1px solid var(--c-line);
-}
-
-.bubble {
-  position: absolute;
-  max-width: 230px;
-  padding: 10px 16px;
-  border-radius: 18px;
-  box-shadow: var(--shadow-card);
-  font-size: 0.95rem;
-}
-
-.bubble--left {
-  right: 2%;
-  bottom: 56px;
-  border: 1px solid var(--c-line);
-  border-bottom-left-radius: 4px;
-  background: var(--c-surface);
-}
-
-.bubble--right {
-  right: 10%;
-  bottom: 0;
-  border-bottom-right-radius: 4px;
-  background: var(--c-teal);
-  color: var(--c-on-teal);
-}
-
-/* ---------------------------------------------------------------- how it works */
-
-.how {
-  padding: 56px 0;
-  border-top: 1px solid var(--c-line);
-}
-
-.how__steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin: 36px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.how__step {
-  padding: 24px;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-l);
-  background: var(--c-surface);
-}
-
-.how__number {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: var(--c-ink);
-  color: var(--c-page);
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.how__title {
-  margin: 16px 0 8px;
-  font-size: 1.15rem;
-}
-
-/* ---------------------------------------------------------------- kinds */
-
-.kinds {
-  padding: 56px 0;
-  border-top: 1px solid var(--c-line);
-  text-align: center;
-}
-
-.kinds__lead {
-  margin-top: 10px;
-}
-
-.kinds__list {
+.welcome__hero {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  max-width: 720px;
-  margin: 28px auto 0;
+  align-items: center;
+  gap: var(--s-7);
+  padding: var(--s-8) 0;
 }
 
-.kinds__chip {
-  padding: 10px 18px;
-  font-size: 1rem;
+.welcome__pitch {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+.welcome__title {
+  max-width: 560px;
+  margin-bottom: var(--s-4);
+  font: var(--t-display);
+  letter-spacing: -0.02em;
+}
+
+.welcome__lead {
+  max-width: 480px;
+  margin-bottom: var(--s-6);
+  color: var(--c-ink-soft);
+  font: var(--t-title-3);
+  font-weight: 400;
+}
+
+.welcome__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.welcome__art-box {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+
+/* Three pieces laid over each other; the offsets are the designers'. */
+.welcome__art {
+  position: relative;
+  height: 440px;
+}
+
+.welcome__art-plan {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 340px;
+  border-color: transparent;
+  box-shadow: var(--shadow-2);
+}
+
+.welcome__art-people {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+}
+
+.welcome__art-chat {
+  position: absolute;
+  top: 210px;
+  left: 230px;
+  width: 300px;
+}
+
+.welcome__art-place {
+  position: absolute;
+  top: 330px;
+  left: 40px;
+  width: 260px;
+  box-shadow: var(--shadow-1);
+}
+
+/* ---------------------------------------------------------------- sections */
+
+.welcome__section {
+  padding: var(--s-7) 0;
+  border-top: 1px solid var(--c-line);
+}
+
+.welcome__heading {
+  margin-bottom: var(--s-6);
+  font: var(--t-title-2);
+}
+
+.welcome__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-5);
+}
+
+.welcome__step-number {
+  margin-bottom: var(--s-3);
+  color: var(--c-ink-soft);
+  font: var(--t-title-1);
+}
+
+.welcome__item-title {
+  font: var(--t-title-3);
+}
+
+.welcome__steps .welcome__item-title {
+  margin-bottom: var(--s-2);
+}
+
+.welcome__features {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-5);
+}
+
+.welcome__feature {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.welcome__feature-text {
+  color: var(--c-ink-soft);
+  font: var(--t-small);
 }
 
 /* ---------------------------------------------------------------- closing */
 
-.closing {
-  display: grid;
-  justify-items: center;
-  gap: 24px;
-  margin: 16px 0 56px;
-  padding: 56px 24px;
-  border-radius: var(--radius-l);
-  background: var(--c-ink);
-  text-align: center;
+.welcome__closing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-5);
+  margin: var(--s-7) 0;
+  padding: var(--s-8) var(--s-7);
+  border-radius: var(--r-l);
+  background: var(--c-surface-soft);
 }
 
-.closing__title {
-  max-width: 16em;
-  color: var(--c-page);
-  font-family: var(--font-display);
-  font-size: clamp(1.7rem, 4vw, 2.6rem);
-  font-weight: 600;
+.welcome__closing-title {
+  font: var(--t-title-1);
+  letter-spacing: -0.015em;
 }
 
 .welcome__footer {
-  padding: 0 0 36px;
-  color: var(--c-ink-faint);
-  font-size: 0.85rem;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-6) 0 var(--s-7);
+  color: var(--c-ink-soft);
 }
 
-/* ---------------------------------------------------------------- narrow screens */
+/* ---------------------------------------------------------------- narrower screens */
 
-@media (max-width: 860px) {
-  .hero {
+@media (max-width: 1023px) {
+  .welcome {
+    padding: 0 var(--s-5);
+  }
+
+  .welcome__features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .welcome {
+    padding: 0 var(--s-4);
+  }
+
+  .welcome__hero {
+    gap: var(--s-6);
+    padding: var(--s-6) 0 var(--s-7);
+  }
+
+  /* On a phone the hero wraps under the pitch anyway; a basis of 420px must not hold it wide. */
+  .welcome__pitch,
+  .welcome__art-box {
+    flex-basis: 100%;
+  }
+
+  .welcome__cta {
+    width: 100%;
+  }
+
+  /* The overlapping picture is wider than a phone: its pieces go one under another. */
+  .welcome__art {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    height: auto;
+  }
+
+  .welcome__art-plan,
+  .welcome__art-chat,
+  .welcome__art-place {
+    position: static;
+    width: 100%;
+  }
+
+  .welcome__steps,
+  .welcome__features {
     grid-template-columns: 1fr;
-    gap: 24px;
-    padding: 24px 0 48px;
   }
 
-  .hero__art {
-    min-height: 400px;
-  }
-
-  .hero__sun {
-    width: 240px;
-    height: 240px;
-  }
-
-  .how__steps {
-    grid-template-columns: 1fr;
+  .welcome__closing {
+    padding: var(--s-6) var(--s-5);
   }
 }
 </style>

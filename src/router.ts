@@ -63,12 +63,20 @@ export const router = createRouter({
           props: (route) => ({ eventId: Number(route.params.eventId) }),
         },
         { path: 'friends', name: 'friends', component: () => import('./views/FriendsView.vue') },
-        { path: 'chats', name: 'chats', component: () => import('./views/ChatsView.vue') },
         {
-          path: 'chats/:chatId(\\d+)',
-          name: 'chat',
-          component: () => import('./views/ChatView.vue'),
-          props: (route) => ({ chatId: Number(route.params.chatId) }),
+          // The list of chats and, next to it, the open one: ChatsView is the layout of both, so
+          // the list stays loaded while moving between chats. The addresses are as before.
+          path: 'chats',
+          name: 'chats',
+          component: () => import('./views/ChatsView.vue'),
+          children: [
+            {
+              path: ':chatId(\\d+)',
+              name: 'chat',
+              component: () => import('./views/ChatView.vue'),
+              props: (route) => ({ chatId: Number(route.params.chatId) }),
+            },
+          ],
         },
         {
           path: 'notifications',

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// A small map (OpenStreetMap, drawn by Leaflet) with one pin. Clicking the map puts the pin there;
-// the pin can be dragged. The component owns no state: it shows the coordinates it is given and
-// reports where the person pointed.
+// A small map (OpenStreetMap, drawn by Leaflet) with one pin, in the designers' "hg-map" frame.
+// Clicking the map puts the pin there; the pin can be dragged. The component owns no state: it
+// shows the coordinates it is given and reports where the person pointed.
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -126,7 +126,7 @@ function report(point: L.LatLng): void {
 <template>
   <div
     ref="element"
-    class="location-map"
+    class="hg-map location-map"
     role="application"
     aria-label="Map. Click to place the pin, or drag the pin."
     data-tst-id="location-map"
@@ -134,21 +134,53 @@ function report(point: L.LatLng): void {
 </template>
 
 <style scoped>
+/* The frame (height, corners, border) is the designers' "hg-map"; here is only what Leaflet needs. */
 .location-map {
   /* Its own stacking context: Leaflet's layers have large z-indexes and would otherwise cover the
      sticky top bar when the page scrolls. */
-  position: relative;
   z-index: 0;
   width: 100%;
-  height: 240px;
-  overflow: hidden;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-m);
+  /* Leaflet paints its own grey behind the tiles that have not arrived yet. */
+  background: var(--c-surface-soft);
   cursor: crosshair;
 }
 
-/* The pin: a drop shape in the accent colour with a light dot. Leaflet creates these elements
-   outside the component's template, hence :deep. */
+/* Everything below is created by Leaflet outside the component's template, hence :deep. */
+
+/* Muted tiles: the map is a background for the pin, not a picture of its own. */
+.location-map :deep(.leaflet-tile-pane) {
+  filter: saturate(0.6);
+}
+
+/* The zoom buttons and the credit line in the colours of the theme (Leaflet's are always white). */
+.location-map :deep(.leaflet-bar) {
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-s);
+  box-shadow: var(--shadow-1);
+}
+
+.location-map :deep(.leaflet-bar a) {
+  border-bottom-color: var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-ink);
+}
+
+.location-map :deep(.leaflet-bar a:hover) {
+  background: var(--c-surface-soft);
+}
+
+.location-map :deep(.leaflet-control-attribution) {
+  background: var(--c-surface);
+  color: var(--c-ink-soft);
+}
+
+.location-map :deep(.leaflet-control-attribution a) {
+  color: var(--c-ink-soft);
+}
+
+/* The pin: a drop shape in the colour of the text with a light dot - the design keeps the accent
+   colour for actions. */
 .location-map :deep(.location-map__pin) {
   cursor: grab;
 }
@@ -160,8 +192,8 @@ function report(point: L.LatLng): void {
   height: 24px;
   border: 2px solid var(--c-surface);
   border-radius: 50% 50% 50% 0;
-  background: var(--c-accent);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
+  background: var(--c-ink);
+  box-shadow: var(--shadow-1);
   transform: rotate(-45deg);
 }
 
@@ -169,7 +201,15 @@ function report(point: L.LatLng): void {
   content: '';
   position: absolute;
   inset: 5px;
-  border-radius: 50%;
+  border-radius: var(--r-full);
   background: var(--c-surface);
+}
+
+/* The tiles stay OpenStreetMap's light ones; in the dark theme they are dimmed so that the map does
+   not glare on a black page. */
+@media (prefers-color-scheme: dark) {
+  .location-map :deep(.leaflet-tile-pane) {
+    filter: saturate(0.6) brightness(0.7) contrast(1.1);
+  }
 }
 </style>

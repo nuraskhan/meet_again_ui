@@ -1,12 +1,13 @@
 <script setup lang="ts">
-// The user's own profile: photos, what they say about themselves, interests, prompts - and the way
-// out. What others see of it is PersonView.
+// The user's own profile: photos at the left, what they say about themselves at the right (about,
+// facts, interests, prompts), and the quiet account block with the way out. What others see of it is
+// PersonView.
 
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api } from '@/api'
 import { serverFileUrl } from '@/api/http'
 import type { Photo, Prompt } from '@/api/types'
-import UserAvatar from '@/components/UserAvatar.vue'
+import { LogOut, Plus, Star, Trash2, X } from 'lucide-vue-next'
 import { auth } from '@/stores/auth'
 import { errorText, toastError, toastOk } from '@/stores/toast'
 
@@ -15,6 +16,7 @@ import { errorText, toastError, toastOk } from '@/stores/toast'
 const MAX_INTERESTS = 10
 const MAX_INTEREST_LENGTH = 30
 const MAX_PROMPTS = 3
+const MAX_BIO_LENGTH = 1000
 
 /** Questions offered for a prompt. The person may also type their own. */
 const PROMPT_QUESTIONS: string[] = [
@@ -52,6 +54,17 @@ const loading = ref<boolean>(true)
 const busy = ref<boolean>(false)
 const error = ref<string>('')
 
+/**
+ * The form as it was last taken from the server, as text: comparing with it tells whether there is
+ * anything to save.
+ */
+const savedForm = ref<string>('')
+
+/** Something is typed that the server does not have yet - an interest not added yet counts too. */
+const dirty = computed<boolean>(
+  () => JSON.stringify(form) !== savedForm.value || interestDraft.value.trim() !== '',
+)
+
 onMounted(async () => {
   try {
     await auth.loadProfile()
@@ -79,6 +92,7 @@ function fill(): void {
   form.bio = profile.bio ?? ''
   form.interests = [...profile.interests]
   form.prompts = profile.prompts.map((prompt) => ({ ...prompt }))
+  savedForm.value = JSON.stringify(form)
 }
 
 /** Adds what is typed as an interest. Commas separate several: "chess, hiking". */
@@ -139,6 +153,8 @@ const PHOTO_TYPES: string[] = ['image/jpeg', 'image/png']
 const PHOTO_MAX_BYTES: number = 6 * 1024 * 1024
 
 const photoBusy = ref<boolean>(false)
+/** The change in progress is an upload: a busy tile stands where the new photo will appear. */
+const uploading = ref<boolean>(false)
 const photoError = ref<string>('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -167,7 +183,12 @@ async function onFileChosen(event: Event): Promise<void> {
     return
   }
 
-  await changePhotos(() => api.uploadPhoto(file), 'Photo added')
+  uploading.value = true
+  try {
+    await changePhotos(() => api.uploadPhoto(file), 'Photo added')
+  } finally {
+    uploading.value = false
+  }
 }
 
 async function removePhoto(photo: Photo): Promise<void> {
@@ -199,125 +220,122 @@ function emptyToNull(value: string): string | null {
 </script>
 
 <template>
-  <main class="page">
-    <div class="page__head">
-      <h1 class="page__title">Profile</h1>
-      <button class="btn btn--ghost btn--small" type="button" data-tst-id="profile-logout" @click="auth.logout()">
-        Log out
-      </button>
+  <div class="app-col app-col--wide">
+    <div class="app-head">
+      <h1 class="app-head__title">My profile</h1>
     </div>
 
-    <p v-if="loading" class="muted">Loading…</p>
-
-    <template v-else>
-      <div class="card who">
-        <UserAvatar
-          :name="form.displayName || '?'"
-          :user-id="auth.state.userId ?? 0"
-          :avatar-url="auth.state.profile?.avatarUrl"
-          :size="72"
-        />
-        <div class="grow">
-          <p class="who__name">{{ form.displayName || 'Your name' }}</p>
-          <p class="muted who__email" data-tst-id="profile-email">{{ auth.state.profile?.email }}</p>
-          <p class="row who__meta">
-            <span class="badge" data-tst-id="profile-privilege">
-              {{ PRIVILEGE_NAME[auth.state.profile?.privilege ?? 'STANDARD'] }} plan
-            </span>
-            <RouterLink
-              v-if="auth.state.userId !== null"
-              class="small"
-              :to="{ name: 'person', params: { userId: auth.state.userId } }"
-              data-tst-id="profile-preview"
-            >
-              See how others see it
-            </RouterLink>
-          </p>
-        </div>
+    <div v-if="loading" class="profile" aria-busy="true">
+      <div class="profile__photos">
+        <span class="hg-photo hg-photo--portrait hg-skel"></span>
       </div>
+      <div class="profile__main">
+        <span class="hg-skel profile__skel-title"></span>
+        <span class="hg-skel profile__skel-field"></span>
+        <span class="hg-skel profile__skel-field"></span>
+        <span class="hg-skel profile__skel-area"></span>
+      </div>
+    </div>
 
+    <div v-else class="profile">
       <!-- ------------------------------------------------------------ photos -->
-      <section class="section">
-        <h2 class="section__title">Photos · {{ photos.length }} of {{ maxPhotos }}</h2>
+      <aside class="profile__photos" aria-label="Photos">
+        <ul class="profile__tiles">
+          <li
+            v-for="(photo, index) in photos"
+            :key="photo.id"
+            class="profile__tile hg-photo hg-photo--portrait"
+            data-tst-id="profile-photo"
+          >
+            <img :src="serverFileUrl(photo.url) ?? undefined" alt="" />
+            <span v-if="index === 0" class="hg-photo__top">
+              <span class="hg-photo__chip">Main</span>
+            </span>
 
-        <div class="card">
-          <ul class="photos">
-            <li v-for="(photo, index) in photos" :key="photo.id" class="photo" data-tst-id="profile-photo">
-              <img class="photo__image" :src="serverFileUrl(photo.url) ?? undefined" alt="" />
-              <span v-if="index === 0" class="badge badge--yes photo__main">Main</span>
-
-              <span class="photo__actions">
-                <button
-                  v-if="index > 0"
-                  class="btn btn--ghost btn--small"
-                  type="button"
-                  :disabled="photoBusy"
-                  data-tst-id="profile-photo-main"
-                  @click="makeMain(photo)"
-                >
-                  Make main
-                </button>
-                <button
-                  class="btn btn--danger btn--small"
-                  type="button"
-                  :disabled="photoBusy"
-                  :aria-label="'Remove photo ' + (index + 1)"
-                  data-tst-id="profile-photo-remove"
-                  @click="removePhoto(photo)"
-                >
-                  Remove
-                </button>
-              </span>
-            </li>
-
-            <li v-if="canAddPhoto" class="photo photo--add">
-              <!-- The real control is the hidden file input; the button opens it. -->
-              <input
-                ref="fileInput"
-                class="photo__file"
-                type="file"
-                accept="image/jpeg,image/png"
-                aria-label="Choose a photo"
-                data-tst-id="profile-photo-file"
-                @change="onFileChosen"
-              />
+            <span class="hg-photo__shade profile__tile-actions">
               <button
-                class="photo__add"
+                v-if="index > 0"
+                class="hg-iconbtn hg-iconbtn--on-photo"
                 type="button"
                 :disabled="photoBusy"
-                data-tst-id="profile-photo-add"
-                @click="fileInput?.click()"
+                :aria-label="'Make photo ' + (index + 1) + ' the main one'"
+                title="Make main"
+                data-tst-id="profile-photo-main"
+                @click="makeMain(photo)"
               >
-                <span class="photo__plus" aria-hidden="true">+</span>
-                {{ photoBusy ? 'Uploading…' : 'Add photo' }}
+                <Star class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
               </button>
-            </li>
-          </ul>
+              <button
+                class="hg-iconbtn hg-iconbtn--on-photo"
+                type="button"
+                :disabled="photoBusy"
+                :aria-label="'Remove photo ' + (index + 1)"
+                title="Remove"
+                data-tst-id="profile-photo-remove"
+                @click="removePhoto(photo)"
+              >
+                <Trash2 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              </button>
+            </span>
+          </li>
 
-          <p class="field__hint photos__rules">
-            JPEG or PNG, up to 6 MB. The first photo is the one shown next to your name.
-            <template v-if="!canAddPhoto">
-              Your plan holds {{ maxPhotos }} photos; remove one to add another.
-            </template>
-          </p>
-          <p v-if="photoError !== ''" class="form-error photos__error" role="alert" data-tst-id="profile-photo-error">
-            {{ photoError }}
-          </p>
-        </div>
-      </section>
+          <!-- The HTTP layer reports no upload progress, so the tile is only shown as busy. -->
+          <li v-if="uploading" class="profile__tile hg-photo hg-photo--portrait" role="status">
+            <span class="hg-skel profile__tile-busy"></span>
+            <span class="hg-sr">Uploading the photo…</span>
+          </li>
 
-      <form data-tst-id="profile-form" @submit.prevent="save">
-        <!-- ---------------------------------------------------------- about -->
-        <section class="section">
-          <h2 class="section__title">About you</h2>
+          <li v-if="canAddPhoto" class="profile__tile">
+            <!-- The real control is the hidden file input; the button opens it. -->
+            <input
+              ref="fileInput"
+              class="hg-sr"
+              type="file"
+              accept="image/jpeg,image/png"
+              tabindex="-1"
+              aria-label="Choose a photo"
+              data-tst-id="profile-photo-file"
+              @change="onFileChosen"
+            />
+            <button
+              class="hg-photo hg-photo--portrait profile__add"
+              type="button"
+              :disabled="photoBusy"
+              data-tst-id="profile-photo-add"
+              @click="fileInput?.click()"
+            >
+              <span class="profile__add-label">
+                <Plus class="hg-icon hg-icon--24" :stroke-width="1.5" aria-hidden="true" />
+                {{ uploading ? 'Uploading…' : 'Add a photo' }}
+              </span>
+            </button>
+          </li>
+        </ul>
 
-          <div class="card stack">
-            <div class="pair">
-              <label class="field">
-                <span class="field__label">Name</span>
+        <p class="hg-num">{{ photos.length }} of {{ maxPhotos }} photos</p>
+        <p class="profile__hint">
+          JPEG or PNG, up to 6 MB each. The main photo is the one shown next to your name.
+          <template v-if="!canAddPhoto">
+            Your plan holds {{ maxPhotos }} photos; remove one to add another.
+          </template>
+        </p>
+        <p v-if="photoError !== ''" class="app-error" role="alert" data-tst-id="profile-photo-error">
+          {{ photoError }}
+        </p>
+      </aside>
+
+      <div class="profile__main">
+        <form class="profile__form" data-tst-id="profile-form" @submit.prevent="save">
+          <!-- -------------------------------------------------------- about -->
+          <section class="profile__section">
+            <h2 class="profile__section-title">About you</h2>
+
+            <div class="profile__pair">
+              <label class="hg-field">
+                <span class="hg-field__label">Name</span>
                 <input
                   v-model.trim="form.displayName"
-                  class="input"
+                  class="hg-input"
                   type="text"
                   maxlength="100"
                   required
@@ -326,37 +344,67 @@ function emptyToNull(value: string): string | null {
                 />
               </label>
 
-              <label class="field">
-                <span class="field__label">Pronouns</span>
+              <label class="hg-field">
+                <span class="hg-field__label">Pronouns</span>
                 <input
                   v-model="form.pronouns"
-                  class="input"
+                  class="hg-input"
                   type="text"
                   maxlength="40"
                   placeholder="she/her, he/him, they/them…"
                   data-tst-id="profile-pronouns"
                 />
               </label>
-            </div>
 
-            <div class="pair">
-              <label class="field">
-                <span class="field__label">Lives in</span>
-                <input v-model="form.city" class="input" type="text" maxlength="100" data-tst-id="profile-city" />
-              </label>
-
-              <label class="field">
-                <span class="field__label">From</span>
-                <input v-model="form.hometown" class="input" type="text" maxlength="100" data-tst-id="profile-hometown" />
+              <label class="hg-field">
+                <span class="hg-field__label">Date of birth</span>
+                <input v-model="form.birthDate" class="hg-input" type="date" data-tst-id="profile-birth-date" />
+                <span class="hg-field__msg">Others see only your age.</span>
               </label>
             </div>
 
-            <div class="pair">
-              <label class="field">
-                <span class="field__label">What you do</span>
+            <div class="hg-field">
+              <label class="hg-field__label" for="profile-bio">About</label>
+              <textarea
+                id="profile-bio"
+                v-model="form.bio"
+                class="hg-textarea"
+                :maxlength="MAX_BIO_LENGTH"
+                placeholder="What you like to do with friends"
+                data-tst-id="profile-bio"
+              ></textarea>
+              <p class="hg-field__msg">
+                <span class="hg-field__counter">{{ form.bio.length }} / {{ MAX_BIO_LENGTH }}</span>
+              </p>
+            </div>
+          </section>
+
+          <!-- -------------------------------------------------------- facts -->
+          <section class="profile__section">
+            <h2 class="profile__section-title">Facts</h2>
+
+            <div class="profile__pair">
+              <label class="hg-field">
+                <span class="hg-field__label">City</span>
+                <input v-model="form.city" class="hg-input" type="text" maxlength="100" data-tst-id="profile-city" />
+              </label>
+
+              <label class="hg-field">
+                <span class="hg-field__label">Hometown</span>
+                <input
+                  v-model="form.hometown"
+                  class="hg-input"
+                  type="text"
+                  maxlength="100"
+                  data-tst-id="profile-hometown"
+                />
+              </label>
+
+              <label class="hg-field">
+                <span class="hg-field__label">Occupation</span>
                 <input
                   v-model="form.occupation"
-                  class="input"
+                  class="hg-input"
                   type="text"
                   maxlength="120"
                   placeholder="Job, trade, student…"
@@ -364,117 +412,126 @@ function emptyToNull(value: string): string | null {
                 />
               </label>
 
-              <label class="field">
-                <span class="field__label">Education</span>
-                <input v-model="form.education" class="input" type="text" maxlength="120" data-tst-id="profile-education" />
+              <label class="hg-field">
+                <span class="hg-field__label">Education</span>
+                <input
+                  v-model="form.education"
+                  class="hg-input"
+                  type="text"
+                  maxlength="120"
+                  data-tst-id="profile-education"
+                />
               </label>
-            </div>
 
-            <div class="pair">
-              <label class="field">
-                <span class="field__label">Languages</span>
+              <label class="hg-field">
+                <span class="hg-field__label">Languages</span>
                 <input
                   v-model="form.languages"
-                  class="input"
+                  class="hg-input"
                   type="text"
                   maxlength="200"
                   placeholder="English, Kazakh…"
                   data-tst-id="profile-languages"
                 />
               </label>
-
-              <label class="field">
-                <span class="field__label">Date of birth</span>
-                <input v-model="form.birthDate" class="input" type="date" data-tst-id="profile-birth-date" />
-                <span class="field__hint">Others see only your age.</span>
-              </label>
             </div>
+          </section>
 
-            <label class="field">
-              <span class="field__label">A few words</span>
-              <textarea
-                v-model="form.bio"
-                class="input"
-                maxlength="1000"
-                placeholder="What you like to do with friends"
-                data-tst-id="profile-bio"
-              ></textarea>
-            </label>
-          </div>
-        </section>
+          <!-- -------------------------------------------------------- interests -->
+          <section class="profile__section">
+            <h2 class="profile__section-title">
+              Interests
+              <span class="profile__count hg-num">{{ form.interests.length }} of {{ MAX_INTERESTS }}</span>
+            </h2>
 
-        <!-- ---------------------------------------------------------- interests -->
-        <section class="section">
-          <h2 class="section__title">Interests · {{ form.interests.length }} of {{ MAX_INTERESTS }}</h2>
-
-          <div class="card stack">
-            <ul v-if="form.interests.length > 0" class="tags">
-              <li v-for="(interest, index) in form.interests" :key="interest" class="chip tags__tag">
+            <ul v-if="form.interests.length > 0" class="profile__chips">
+              <li v-for="(interest, index) in form.interests" :key="interest" class="hg-chip hg-chip--removable">
                 {{ interest }}
                 <button
-                  class="tags__remove"
+                  class="hg-chip__remove"
                   type="button"
                   :aria-label="'Remove ' + interest"
                   @click="form.interests.splice(index, 1)"
                 >
-                  ✕
+                  <X class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
                 </button>
               </li>
             </ul>
 
-            <div v-if="form.interests.length < MAX_INTERESTS" class="tags__add">
-              <input
-                v-model="interestDraft"
-                class="input"
-                type="text"
-                :maxlength="MAX_INTEREST_LENGTH * 4"
-                placeholder="Hiking, chess, banya…"
-                aria-label="An interest to add"
-                data-tst-id="profile-interest"
-                @keydown.enter.prevent="addInterest"
-              />
-              <button class="btn btn--ghost" type="button" data-tst-id="profile-interest-add" @click="addInterest">
-                Add
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- ---------------------------------------------------------- prompts -->
-        <section class="section">
-          <h2 class="section__title">Prompts · {{ form.prompts.length }} of {{ MAX_PROMPTS }}</h2>
-
-          <div class="stack">
-            <div v-for="(prompt, index) in form.prompts" :key="index" class="card stack" data-tst-id="profile-prompt">
-              <label class="field">
-                <span class="field__label">Question</span>
-                <!-- A list to pick from, and free to type one's own. -->
+            <div v-if="form.interests.length < MAX_INTERESTS" class="hg-field">
+              <label class="hg-field__label" for="profile-interest">Add an interest</label>
+              <div class="profile__interest-add">
                 <input
-                  v-model="prompt.question"
-                  class="input"
+                  id="profile-interest"
+                  v-model="interestDraft"
+                  class="hg-input"
                   type="text"
-                  maxlength="120"
-                  list="prompt-questions"
-                  placeholder="Pick one or write your own"
-                  :data-tst-id="'profile-prompt-question-' + index"
+                  :maxlength="MAX_INTEREST_LENGTH * 4"
+                  placeholder="Type and press Enter"
+                  data-tst-id="profile-interest"
+                  @keydown.enter.prevent="addInterest"
                 />
-              </label>
+                <button
+                  class="hg-btn hg-btn--outline"
+                  type="button"
+                  :disabled="interestDraft.trim() === ''"
+                  data-tst-id="profile-interest-add"
+                  @click="addInterest"
+                >
+                  <span>Add</span>
+                </button>
+              </div>
+              <p class="hg-field__msg">Commas separate several: hiking, chess, banya.</p>
+            </div>
+          </section>
 
-              <label class="field">
-                <span class="field__label">Your answer</span>
+          <!-- -------------------------------------------------------- prompts -->
+          <section class="profile__section">
+            <h2 class="profile__section-title">
+              Prompts
+              <span class="profile__count hg-num">{{ form.prompts.length }} of {{ MAX_PROMPTS }}</span>
+            </h2>
+
+            <div
+              v-for="(prompt, index) in form.prompts"
+              :key="index"
+              class="hg-card profile__prompt"
+              data-tst-id="profile-prompt"
+            >
+              <div class="profile__prompt-head">
+                <label class="hg-field app-grow">
+                  <span class="hg-field__label">Question</span>
+                  <!-- A list to pick from, and free to type one's own. -->
+                  <input
+                    v-model="prompt.question"
+                    class="hg-input"
+                    type="text"
+                    maxlength="120"
+                    list="prompt-questions"
+                    placeholder="Pick one or write your own"
+                    :data-tst-id="'profile-prompt-question-' + index"
+                  />
+                </label>
+                <button
+                  class="hg-iconbtn"
+                  type="button"
+                  aria-label="Remove this prompt"
+                  title="Remove this prompt"
+                  @click="form.prompts.splice(index, 1)"
+                >
+                  <Trash2 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                </button>
+              </div>
+
+              <label class="hg-field">
+                <span class="hg-field__label">Answer</span>
                 <textarea
                   v-model="prompt.answer"
-                  class="input"
+                  class="hg-textarea profile__answer"
                   maxlength="300"
                   :data-tst-id="'profile-prompt-answer-' + index"
                 ></textarea>
               </label>
-
-              <div>
-                <button class="btn btn--danger btn--small" type="button" @click="form.prompts.splice(index, 1)">
-                  Remove this prompt
-                </button>
-              </div>
             </div>
 
             <datalist id="prompt-questions">
@@ -482,176 +539,315 @@ function emptyToNull(value: string): string | null {
             </datalist>
 
             <div v-if="form.prompts.length < MAX_PROMPTS">
-              <button class="btn btn--ghost" type="button" data-tst-id="profile-prompt-add" @click="addPrompt">
-                + Add a prompt
+              <button class="hg-btn hg-btn--quiet" type="button" data-tst-id="profile-prompt-add" @click="addPrompt">
+                <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <span>Add a prompt</span>
               </button>
             </div>
+          </section>
+
+          <p v-if="error !== ''" class="app-error" role="alert">{{ error }}</p>
+
+          <!-- -------------------------------------------------------- the save bar -->
+          <div class="profile__bar">
+            <span class="profile__bar-state">
+              {{ dirty ? 'You have unsaved changes.' : 'Everything is saved.' }}
+            </span>
+            <RouterLink
+              v-if="auth.state.userId !== null"
+              class="hg-btn hg-btn--outline"
+              :to="{ name: 'person', params: { userId: auth.state.userId } }"
+              data-tst-id="profile-preview"
+            >
+              See how others see it
+            </RouterLink>
+            <button
+              class="hg-btn hg-btn--primary"
+              :class="{ 'is-loading': busy }"
+              type="submit"
+              :disabled="busy || !dirty"
+              data-tst-id="profile-save"
+            >
+              <span>Save</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- ---------------------------------------------------------- account -->
+        <section class="hg-card profile__account">
+          <h2 class="hg-card__title">Account</h2>
+          <p class="profile__account-line">
+            <span class="profile__email" data-tst-id="profile-email">{{ auth.state.profile?.email }}</span>
+            <span v-if="auth.state.profile?.emailVerified" class="hg-badge hg-badge--success">Confirmed</span>
+            <span v-else class="hg-badge hg-badge--warning">Not confirmed</span>
+          </p>
+          <p class="profile__account-line">
+            <span class="hg-badge" data-tst-id="profile-privilege">
+              {{ PRIVILEGE_NAME[auth.state.profile?.privilege ?? 'STANDARD'] }}
+            </span>
+            <span class="hg-soft hg-num">Up to {{ maxPhotos }} photos</span>
+          </p>
+          <div>
+            <button class="hg-btn hg-btn--outline" type="button" data-tst-id="profile-logout" @click="auth.logout()">
+              <LogOut class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Log out</span>
+            </button>
           </div>
         </section>
-
-        <p v-if="error !== ''" class="form-error section" role="alert">{{ error }}</p>
-
-        <div class="section">
-          <button class="btn btn--big" type="submit" :disabled="busy" data-tst-id="profile-save">
-            {{ busy ? 'Saving…' : 'Save profile' }}
-          </button>
-        </div>
-      </form>
-    </template>
-  </main>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.who {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-}
-
-.who__name {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.who__email {
-  overflow-wrap: anywhere;
-}
-
-.who__meta {
-  margin-top: 10px;
+/* Two columns from 1024px: the photos stay in sight while the form scrolls. Narrower - one column,
+   the photos a row that scrolls sideways above the form. */
+.profile {
+  display: grid;
+  grid-template-columns: minmax(0, var(--size-list-pane)) minmax(0, 1fr);
+  gap: var(--s-7);
+  align-items: start;
 }
 
 /* ---------------------------------------------------------------- photos */
 
-.photos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.photo {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.photo__image {
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-m);
-  background: var(--c-surface-soft);
-  object-fit: cover;
-}
-
-.photo__main {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-}
-
-.photo__actions {
+/* Taller than the window with many photos, so it scrolls by itself: a sticky block taller than
+   the window would keep its lower tiles out of reach. The padding keeps focus outlines unclipped. */
+.profile__photos {
+  position: sticky;
+  top: var(--s-6);
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+  max-height: calc(100vh - var(--s-6) * 2);
+  max-height: calc(100dvh - var(--s-6) * 2);
+  margin: calc(var(--s-1) * -1);
+  padding: var(--s-1);
+  overflow-y: auto;
 }
 
-/* Hidden from sight, still reachable by assistive technology through the button next to it. */
-.photo__file {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.photo__add {
+.profile__tiles {
   display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.profile__tile {
+  position: relative;
+  min-width: 0;
+}
+
+/* The main photo (or, without photos, the invitation to add one) is the large one. */
+.profile__tile:first-child {
+  grid-column: 1 / -1;
+}
+
+.profile__tile-actions {
+  justify-content: flex-end;
+  padding: var(--s-5) var(--s-2) var(--s-2);
+}
+
+.profile__tile-busy {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+
+.profile__add {
+  display: grid;
+  place-items: center;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  border: 1px dashed var(--c-line);
-  border-radius: var(--radius-m);
+  border: 1px dashed var(--c-ink-faint);
   background: transparent;
   color: var(--c-ink-soft);
-  font-weight: 600;
+  font: var(--t-small);
   cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
 }
 
-.photo__add:hover:not(:disabled) {
-  border-color: var(--c-accent);
-  color: var(--c-accent);
+.profile__add:hover:not(:disabled) {
+  border-color: var(--c-ink);
+  color: var(--c-ink);
 }
 
-.photo__plus {
-  font-size: 2rem;
-  line-height: 1;
+.profile__add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.photos__rules {
-  margin-top: 12px;
+.profile__add-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
 }
 
-.photos__error {
-  margin-top: 10px;
+.profile__hint {
+  font: var(--t-small);
+  color: var(--c-ink-soft);
 }
 
 /* ---------------------------------------------------------------- form */
 
-.pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.profile__main,
+.profile__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  min-width: 0;
 }
 
-.tags {
+.profile__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.profile__section-title {
+  font: var(--t-title-2);
+}
+
+.profile__count {
+  margin-left: var(--s-1);
+  font: var(--t-small);
+  color: var(--c-ink-soft);
+}
+
+.profile__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+
+.profile__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--s-2);
 }
 
-.tags__tag {
-  padding-right: 6px;
-}
-
-.tags__remove {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--c-ink-faint);
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.tags__remove:hover {
-  background: var(--c-danger-soft);
-  color: var(--c-danger);
-}
-
-.tags__add {
+.profile__interest-add {
   display: flex;
-  gap: 10px;
+  gap: var(--s-2);
 }
 
-@media (max-width: 520px) {
-  .pair {
-    grid-template-columns: 1fr;
+.profile__prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.profile__prompt-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
+
+.profile__answer {
+  min-height: var(--s-8);
+}
+
+/* Stays at the bottom of the window while the form is in sight. */
+.profile__bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 calc(var(--s-4) * -1);
+  padding: var(--s-4);
+  border-radius: var(--r-m);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-2);
+}
+
+.profile__bar-state {
+  flex: 1;
+  font: var(--t-small);
+  color: var(--c-ink-soft);
+}
+
+/* ---------------------------------------------------------------- account */
+
+.profile__account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  border: 0;
+  background: var(--c-surface-soft);
+}
+
+.profile__account-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.profile__email {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- loading */
+
+.profile__skel-title {
+  width: 40%;
+  height: var(--s-5);
+}
+
+.profile__skel-field {
+  height: var(--size-control);
+}
+
+.profile__skel-area {
+  height: calc(var(--s-8) * 2);
+}
+
+/* ---------------------------------------------------------------- narrower windows */
+
+@media (max-width: 1023px) {
+  .profile {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-6);
+  }
+
+  .profile__photos {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .profile__tiles {
+    display: flex;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding: var(--s-1) var(--s-1) var(--s-2);
+    margin: calc(var(--s-1) * -1);
+    scroll-snap-type: x proximity;
+  }
+
+  .profile__tile {
+    flex: 0 0 40%;
+    max-width: var(--size-sidebar);
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 767px) {
+  .profile__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Above the tab bar of the frame, which is fixed to the bottom of the window. */
+  .profile__bar {
+    bottom: calc(var(--size-tab-bar) + env(safe-area-inset-bottom));
+  }
+
+  .profile__bar .hg-btn--primary {
+    flex: 1 1 100%;
   }
 }
 </style>

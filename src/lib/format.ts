@@ -2,17 +2,17 @@
 
 import type { EventTypeCode } from '@/api/types'
 
-/** The picture and the short name of every event type. */
-export const EVENT_TYPE_LOOK: Record<EventTypeCode, { icon: string; label: string }> = {
-  BATH: { icon: '🧖', label: 'Bathhouse' },
-  FOOD: { icon: '🍜', label: 'Eat together' },
-  COFFEE: { icon: '☕', label: 'Coffee' },
-  BAR: { icon: '🍸', label: 'Bar' },
-  WALK: { icon: '🚶', label: 'Walk' },
-  CINEMA: { icon: '🎬', label: 'Cinema' },
-  SPORT: { icon: '⚽', label: 'Sport' },
-  BOARD_GAMES: { icon: '🎲', label: 'Board games' },
-  OTHER: { icon: '✨', label: 'Something else' },
+/** The short name of every event type. Its picture is components/EventTypeIcon.vue. */
+export const EVENT_TYPE_LOOK: Record<EventTypeCode, { label: string }> = {
+  BATH: { label: 'Bathhouse' },
+  FOOD: { label: 'Eat together' },
+  COFFEE: { label: 'Coffee' },
+  BAR: { label: 'Bar' },
+  WALK: { label: 'Walk' },
+  CINEMA: { label: 'Cinema' },
+  SPORT: { label: 'Sport' },
+  BOARD_GAMES: { label: 'Board games' },
+  OTHER: { label: 'Something else' },
 }
 
 /** The currency sign shown after a price. The server stores prices as plain numbers. */

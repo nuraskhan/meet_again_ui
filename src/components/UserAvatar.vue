@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// A person's picture, or their initials on a colour that is always the same for the same person.
+// A person's picture, or their initials. The look is the designers' "hg-avatar": without a
+// picture the initials stand on a neutral grey - the design keeps colour for actions only.
 
 import { computed, ref, watch } from 'vue'
 import { serverFileUrl } from '@/api/http'
@@ -8,23 +9,15 @@ import { initials } from '@/lib/format'
 const props = withDefaults(
   defineProps<{
     name: string
-    /** Decides the colour, so one person looks the same everywhere. */
-    userId: number
+    /** Kept for the callers: the design no longer colours an avatar by the person. */
+    userId?: number
     /** The server path of the uploaded picture, as the server gives it; anything else is ignored. */
     avatarUrl?: string | null
+    /** The diameter in pixels. The design uses 24, 32, 40, 64 and 96. */
     size?: number
   }>(),
-  { avatarUrl: null, size: 40 },
+  { userId: 0, avatarUrl: null, size: 40 },
 )
-
-// Six hues spread around the wheel; saturation and lightness are fixed so the white letters stay
-// readable on every one of them.
-const HUES: number[] = [14, 42, 168, 204, 262, 330]
-
-const background = computed<string>(() => {
-  const hue: number = HUES[Math.abs(props.userId) % HUES.length] ?? 14
-  return 'hsl(' + hue + ' 55% 42%)'
-})
 
 /** Only a picture kept by our server is ever loaded; see serverFileUrl. */
 const source = computed<string | null>(() => serverFileUrl(props.avatarUrl))
@@ -38,33 +31,8 @@ watch(source, () => {
 </script>
 
 <template>
-  <span
-    class="avatar"
-    :style="{ width: size + 'px', height: size + 'px', fontSize: size * 0.4 + 'px', background }"
-    aria-hidden="true"
-  >
-    <img v-if="source !== null && !broken" class="avatar__image" :src="source" alt="" @error="broken = true" />
+  <span class="hg-avatar" :style="{ '--av': size + 'px' }" aria-hidden="true">
+    <img v-if="source !== null && !broken" :src="source" alt="" @error="broken = true" />
     <template v-else>{{ initials(name) }}</template>
   </span>
 </template>
-
-<style scoped>
-.avatar {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 50%;
-  color: #ffffff; /* always on a dark, saturated background, in both themes */
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  user-select: none;
-}
-
-.avatar__image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-</style>

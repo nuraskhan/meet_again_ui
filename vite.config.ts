@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // Ports are from the "Ports" table of the backend's CLAUDE.md:
-// 19000 = this UI, 29000 = REST server magain.
+// 19000 = this UI, 29000 = REST server hangelo.
 export default defineConfig({
   plugins: [
     vue(),
