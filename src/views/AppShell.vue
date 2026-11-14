@@ -2,7 +2,11 @@
 // The frame of every page for a logged-in user: the bar with the navigation, and the page under it.
 
 import UserAvatar from '@/components/UserAvatar.vue'
+import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue'
+import { useRoute } from 'vue-router'
 import { auth } from '@/stores/auth'
+
+const route = useRoute()
 
 const NAV: { name: string; label: string; icon: string }[] = [
   { name: 'plans', label: 'Plans', icon: '🗓' },
@@ -46,6 +50,10 @@ const NAV: { name: string; label: string; icon: string }[] = [
         </RouterLink>
       </div>
     </header>
+
+    <!-- Not on the chat page: it fills the screen exactly, and a strip above would push the message
+         field off it. -->
+    <VerifyEmailBanner v-if="route.name !== 'chat'" />
 
     <RouterView v-slot="{ Component }">
       <Transition name="fade" mode="out-in">

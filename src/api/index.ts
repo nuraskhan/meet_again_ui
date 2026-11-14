@@ -24,6 +24,10 @@ export const api = {
   register: (email: string, password: string, displayName: string) =>
     post<AuthResponse>('/auth/register', { email, password, displayName }),
   login: (email: string, password: string) => post<AuthResponse>('/auth/login', { email, password }),
+  /** The link from the confirmation letter. Works without being logged in. */
+  verifyEmail: (token: string) => post<void>('/auth/verify-email', { token }),
+  /** "Send the confirmation letter again." The server allows it once a minute. */
+  sendEmailVerification: () => post<void>('/account/email-verification/send'),
 
   // ---------------------------------------------------------------- profile
   myProfile: () => get<MyProfile>('/profile/me'),

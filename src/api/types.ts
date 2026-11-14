@@ -21,6 +21,8 @@ export interface Profile {
 
 export interface MyProfile extends Profile {
   email: string
+  /** The person confirmed the address by the link we sent. Reminders go only to a confirmed one. */
+  emailVerified: boolean
 }
 
 /** The text part of a profile. The picture is uploaded separately, as a file. */
@@ -146,6 +148,8 @@ export interface CreateEventRequest {
   priceMin: number
   priceMax: number
   proposedTimes: string[]
+  /** The time zone the dates are meant in (IANA name, from the browser). Reminders show it. */
+  timeZone: string | null
   /** May be empty: people then come by the link. */
   inviteeIds: number[]
 }

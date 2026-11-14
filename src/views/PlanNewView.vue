@@ -97,6 +97,9 @@ async function send(): Promise<void> {
       proposedTimes: form.times
         .map(localInputToIso)
         .filter((iso): iso is string => iso !== null),
+      // The dates above are typed in the time of this browser; say which, so a reminder can show
+      // the same clock time to everyone.
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
       inviteeIds: form.inviteeIds,
     })
 

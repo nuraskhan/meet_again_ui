@@ -35,6 +35,12 @@ export const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      // The link from the confirmation letter: for everyone, logged in or not.
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('./views/VerifyEmailView.vue'),
+    },
+    {
       // An invitation opened by its link: for everyone, logged in or not.
       path: '/i/:shareToken',
       name: 'invite',
