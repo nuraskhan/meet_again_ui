@@ -53,6 +53,7 @@ export const router = createRouter({
       component: () => import('./views/AppShell.vue'),
       meta: { requiresAuth: true },
       children: [
+        { path: 'feed', name: 'feed', component: () => import('./views/FeedView.vue') },
         { path: 'plans', name: 'plans', component: () => import('./views/PlansView.vue') },
         { path: 'plans/new', name: 'plan-new', component: () => import('./views/PlanNewView.vue') },
         {

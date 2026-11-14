@@ -119,7 +119,14 @@ export interface EventTypeInfo {
   defaultPriceMax: number
 }
 
-export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED'
+/**
+ * PENDING - invited, not answered; ACCEPTED - coming; DECLINED - not coming by their own choice (may
+ * join again); REMOVED - taken out by the creator (may not).
+ */
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'REMOVED'
+
+/** PRIVATE - only the invited; PUBLIC - shown in the feed, anyone can join. */
+export type EventVisibility = 'PRIVATE' | 'PUBLIC'
 /**
  * ACTIVE - open; CANCELLED - called off by its creator; EXPIRED - its last date has passed (set by
  * the server).
@@ -176,6 +183,7 @@ export interface EventDto extends EventFacts {
   id: number
   createdAt: string
   chatId: number
+  visibility: EventVisibility
   /** The secret part of the link to the event. Only the creator gets it. */
   shareToken: string | null
   creatorId: number
@@ -206,6 +214,8 @@ export interface CreateEventRequest {
   proposedTimes: string[]
   /** The time zone the dates are meant in (IANA name, from the browser). Reminders show it. */
   timeZone: string | null
+  /** Left out = PRIVATE. */
+  visibility: EventVisibility
   /** May be empty: people then come by the link. */
   inviteeIds: number[]
 }
@@ -269,4 +279,31 @@ export interface Suggestion {
   myDistanceMi: number | null
   /** An invented demonstration place, not a real business. */
   sample: boolean
+}
+
+/** Someone in the feed: enough to show a face and to open their profile. */
+export interface FeedPerson {
+  userId: number
+  displayName: string
+  avatarUrl: string | null
+}
+
+/**
+ * A public event as the feed shows it: what the invitation says, who invites, who is coming, and
+ * where the current user stands. The chat and the link are not here - one joins to get them.
+ */
+export interface FeedItem extends EventFacts {
+  id: number
+  createdAt: string
+  creatorId: number
+  creatorAvatarUrl: string | null
+  creatorCity: string | null
+  /** How many guests are coming (the creator is not counted). */
+  goingCount: number
+  /** The first few of them. */
+  going: FeedPerson[]
+  /** No place is left. */
+  full: boolean
+  /** CREATOR, the current user's own answer, or NONE for someone not part of it yet. */
+  myStanding: 'CREATOR' | 'NONE' | InvitationStatus
 }

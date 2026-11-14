@@ -9,6 +9,7 @@ import { auth } from '@/stores/auth'
 const route = useRoute()
 
 const NAV: { name: string; label: string; icon: string }[] = [
+  { name: 'feed', label: 'Feed', icon: '📣' },
   { name: 'plans', label: 'Plans', icon: '🗓' },
   { name: 'friends', label: 'Friends', icon: '👋' },
   { name: 'chats', label: 'Chats', icon: '💬' },

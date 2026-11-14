@@ -20,6 +20,10 @@ const event = ref<EventDto | null>(null)
 const loading = ref<boolean>(true)
 const missing = ref<boolean>(false)
 const busy = ref<boolean>(false)
+/** A guest pressed "I can't come after all" once and is asked to confirm. */
+const confirmingLeave = ref<boolean>(false)
+/** The guest the creator is about to remove (their user id), waiting for a confirmation. */
+const removing = ref<number | null>(null)
 /** The creator pressed "Cancel plan" once and is asked to confirm. */
 const confirmingCancel = ref<boolean>(false)
 
@@ -131,10 +135,40 @@ async function cancel(): Promise<void> {
   }
 }
 
+/** A guest who is coming changes their mind. They leave the chat too, and may join again. */
+async function leave(): Promise<void> {
+  busy.value = true
+  try {
+    await api.leaveEvent(props.eventId)
+    toastOk('You left the plan')
+    confirmingLeave.value = false
+    await load()
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    busy.value = false
+  }
+}
+
+/** The creator takes a guest out of the plan and its chat. That person cannot join again. */
+async function removeGuest(invitee: Invitee): Promise<void> {
+  busy.value = true
+  try {
+    event.value = await api.removeGuest(props.eventId, invitee.userId)
+    toastOk(invitee.displayName + ' was removed')
+    removing.value = null
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    busy.value = false
+  }
+}
+
 const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
   ACCEPTED: { text: 'In', kind: 'badge--yes' },
   DECLINED: { text: "Can't", kind: 'badge--no' },
   PENDING: { text: 'No answer yet', kind: 'badge--wait' },
+  REMOVED: { text: 'Removed', kind: 'badge--no' },
 }
 </script>
 
@@ -165,8 +199,17 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 
         <p v-if="event.description" class="plan__note">{{ event.description }}</p>
 
-        <p class="small muted plan__by">
-          Invited by {{ isCreator ? 'you' : event.creatorName }}
+        <p class="row small muted plan__by">
+          <span>
+            Invited by
+            <template v-if="isCreator">you</template>
+            <RouterLink v-else :to="{ name: 'person', params: { userId: event.creatorId } }">
+              {{ event.creatorName }}
+            </RouterLink>
+          </span>
+          <span v-if="event.visibility === 'PUBLIC'" class="badge" data-tst-id="plan-public">
+            📣 Public · in the feed
+          </span>
         </p>
 
         <!-- The invitee has not answered: the two buttons are the whole point of the page. -->
@@ -188,7 +231,29 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
           >
             💬 Open the chat
           </RouterLink>
-          <p v-else class="small muted">You declined, so you are not in the chat of this plan.</p>
+          <p v-else class="small muted">You are not coming, so you are not in the chat of this plan.</p>
+
+          <!-- A guest who said yes can change their mind. -->
+          <template v-if="active && mine?.status === 'ACCEPTED'">
+            <button
+              v-if="!confirmingLeave"
+              class="btn btn--ghost btn--small plan__leave"
+              type="button"
+              data-tst-id="plan-leave"
+              @click="confirmingLeave = true"
+            >
+              I can't come after all
+            </button>
+            <span v-else class="row plan__leave">
+              <span class="small muted">Leave the plan and its chat?</span>
+              <button class="btn btn--danger btn--small" type="button" :disabled="busy" data-tst-id="plan-leave-confirm" @click="leave">
+                Yes, leave
+              </button>
+              <button class="btn btn--ghost btn--small" type="button" :disabled="busy" @click="confirmingLeave = false">
+                Stay
+              </button>
+            </span>
+          </template>
         </div>
       </article>
 
@@ -257,6 +322,35 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
             <span class="badge" :class="STATUS_LOOK[invitee.status].kind">
               {{ STATUS_LOOK[invitee.status].text }}
             </span>
+
+            <!-- The creator can show a guest the door: needed above all in a plan anyone can join. -->
+            <template v-if="isCreator && active && (invitee.status === 'ACCEPTED' || invitee.status === 'PENDING')">
+              <span v-if="removing === invitee.userId" class="row">
+                <button
+                  class="btn btn--danger btn--small"
+                  type="button"
+                  :disabled="busy"
+                  data-tst-id="invitee-remove-confirm"
+                  @click="removeGuest(invitee)"
+                >
+                  Remove for good
+                </button>
+                <button class="btn btn--ghost btn--small" type="button" :disabled="busy" @click="removing = null">
+                  Keep
+                </button>
+              </span>
+              <button
+                v-else
+                class="people__remove"
+                type="button"
+                :aria-label="'Remove ' + invitee.displayName + ' from this plan'"
+                title="Remove from this plan"
+                data-tst-id="invitee-remove"
+                @click="removing = invitee.userId"
+              >
+                ✕
+              </button>
+            </template>
           </li>
         </ul>
       </section>
@@ -394,6 +488,28 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
   background: var(--c-accent-soft);
   color: var(--c-accent);
   font-weight: 600;
+}
+
+.plan__leave {
+  margin-left: auto;
+}
+
+.people__remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--c-ink-faint);
+  cursor: pointer;
+}
+
+.people__remove:hover {
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
 }
 
 .plan__confirm {

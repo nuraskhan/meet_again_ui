@@ -3,13 +3,14 @@
 // friends and sends.
 
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
-import type { EventTypeCode, EventTypeInfo, Friend } from '@/api/types'
+import type { EventTypeCode, EventTypeInfo, EventVisibility, Friend } from '@/api/types'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { distanceRange, EVENT_TYPE_LOOK, localInputToIso, priceRange } from '@/lib/format'
 import { errorText, toastError, toastOk } from '@/stores/toast'
 
+const route = useRoute()
 const router = useRouter()
 
 const types = ref<EventTypeInfo[]>([])
@@ -30,6 +31,8 @@ const form = reactive({
   /** Proposed dates as values of <input type="datetime-local">; an empty one is ignored. */
   times: [''] as string[],
   inviteeIds: [] as number[],
+  // "Invite everyone" on the feed opens this form already set to public (?public=1).
+  visibility: (route.query.public === '1' ? 'PUBLIC' : 'PRIVATE') as EventVisibility,
 })
 
 /** The server accepts at most this many proposed dates. */
@@ -100,15 +103,18 @@ async function send(): Promise<void> {
       // The dates above are typed in the time of this browser; say which, so a reminder can show
       // the same clock time to everyone.
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+      visibility: form.visibility,
       inviteeIds: form.inviteeIds,
     })
 
     toastOk(
-      form.inviteeIds.length === 0
-        ? 'Created. Now share the link.'
-        : form.inviteeIds.length === 1
-          ? 'Invitation sent'
-          : 'Invitations sent',
+      form.visibility === 'PUBLIC'
+        ? 'Posted to the feed'
+        : form.inviteeIds.length === 0
+          ? 'Created. Now share the link.'
+          : form.inviteeIds.length === 1
+            ? 'Invitation sent'
+            : 'Invitations sent',
     )
     await router.replace({ name: 'plan', params: { eventId: event.id } })
   } catch (caught) {
@@ -281,8 +287,44 @@ async function send(): Promise<void> {
         <section class="card">
           <h2 class="section__title new__card-title">3. Who is invited?</h2>
 
+          <!-- Only the invited, or everyone: a public plan is shown in the feed. -->
+          <div class="new__who" role="radiogroup" aria-label="Who can join">
+            <label class="who-option" :class="{ 'who-option--on': form.visibility === 'PRIVATE' }">
+              <input
+                v-model="form.visibility"
+                class="who-option__radio"
+                type="radio"
+                value="PRIVATE"
+                data-tst-id="plan-new-private"
+              />
+              <span>
+                <span class="who-option__title">🔒 Only people I invite</span>
+                <span class="small muted who-option__text">Friends you tick, and anyone you send the link to.</span>
+              </span>
+            </label>
+
+            <label class="who-option" :class="{ 'who-option--on': form.visibility === 'PUBLIC' }">
+              <input
+                v-model="form.visibility"
+                class="who-option__radio"
+                type="radio"
+                value="PUBLIC"
+                data-tst-id="plan-new-public"
+              />
+              <span>
+                <span class="who-option__title">📣 Everyone</span>
+                <span class="small muted who-option__text">
+                  Shown in the feed. Anyone can join and enters the group chat; you can remove a guest.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <p class="small muted new__who-hint" data-tst-id="plan-new-link-hint">
-            <template v-if="friends.length === 0">
+            <template v-if="form.visibility === 'PUBLIC'">
+              You can still invite friends by name: they get the invitation directly.
+            </template>
+            <template v-else-if="friends.length === 0">
               You have no friends here yet - that is fine. After creating the plan you get a link to
               send to anyone.
             </template>
@@ -316,16 +358,26 @@ async function send(): Promise<void> {
         <div class="new__send">
           <p class="small muted">
             {{
-              form.inviteeIds.length === 0
-                ? 'You will get a link to share. A chat is created for everyone who joins.'
-                : 'A group chat with ' +
-                  form.inviteeIds.length +
-                  (form.inviteeIds.length === 1 ? ' friend' : ' friends') +
-                  ' will be created. You also get a link for others.'
+              form.visibility === 'PUBLIC'
+                ? 'It appears in the feed for everybody. A group chat is created for everyone who joins.'
+                : form.inviteeIds.length === 0
+                  ? 'You will get a link to share. A chat is created for everyone who joins.'
+                  : 'A group chat with ' +
+                    form.inviteeIds.length +
+                    (form.inviteeIds.length === 1 ? ' friend' : ' friends') +
+                    ' will be created. You also get a link for others.'
             }}
           </p>
           <button class="btn btn--big" type="submit" :disabled="!canSend" data-tst-id="plan-new-send">
-            {{ busy ? 'Creating…' : form.inviteeIds.length === 0 ? 'Create and get the link' : 'Send invitation' }}
+            {{
+              busy
+                ? 'Creating…'
+                : form.visibility === 'PUBLIC'
+                  ? 'Post to the feed'
+                  : form.inviteeIds.length === 0
+                    ? 'Create and get the link'
+                    : 'Send invitation'
+            }}
           </button>
         </div>
       </template>
@@ -433,8 +485,55 @@ async function send(): Promise<void> {
   color: var(--c-danger);
 }
 
+.new__who {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.who-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+}
+
+.who-option:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 50%, var(--c-line));
+}
+
+.who-option--on,
+.who-option--on:hover {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.who-option__radio {
+  margin-top: 3px;
+  accent-color: var(--c-accent);
+}
+
+.who-option__title {
+  display: block;
+  font-weight: 700;
+}
+
+.who-option__text {
+  display: block;
+}
+
+@media (max-width: 560px) {
+  .new__who {
+    grid-template-columns: 1fr;
+  }
+}
+
 .new__who-hint {
-  margin: 4px 0 10px;
+  margin: 10px 0;
 }
 
 .new__friends {
