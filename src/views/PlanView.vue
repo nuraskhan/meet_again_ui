@@ -7,6 +7,7 @@ import { ApiError } from '@/api/http'
 import type { EventDto, Invitee } from '@/api/types'
 import EventSummary from '@/components/EventSummary.vue'
 import PreferenceForm from '@/components/PreferenceForm.vue'
+import SuggestedPlaces from '@/components/SuggestedPlaces.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { inviteLink } from '@/lib/format'
@@ -30,9 +31,12 @@ const mine = computed<Invitee | undefined>(() =>
   event.value?.invitees.find((invitee) => invitee.userId === auth.state.userId),
 )
 
-/** A guest who has not declined says where they are and how far they travel. */
+/**
+ * The creator and a guest who has not declined say where they are and how far they travel: a place
+ * is suggested from where everyone is coming from.
+ */
 const canSetPreference = computed<boolean>(
-  () => active.value && mine.value !== undefined && mine.value.status !== 'DECLINED',
+  () => active.value && (isCreator.value || (mine.value !== undefined && mine.value.status !== 'DECLINED')),
 )
 
 /** What the others may know about a guest's preference: "Brooklyn · up to 5 mi". */
@@ -146,8 +150,13 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 
     <template v-else-if="event !== null">
       <article class="card plan" data-tst-id="plan">
-        <p v-if="!active" class="form-error plan__cancelled" data-tst-id="plan-cancelled">
-          This plan was cancelled.
+        <p
+          v-if="!active"
+          class="plan__closed"
+          :class="{ 'form-error': event.status === 'CANCELLED' }"
+          data-tst-id="plan-closed"
+        >
+          {{ event.status === 'EXPIRED' ? 'This plan is over.' : 'This plan was cancelled.' }}
         </p>
 
         <EventSummary :event="event" />
@@ -183,8 +192,7 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
         </div>
       </article>
 
-      <!-- A guest says where they are and how far they travel. Not for the creator: their wish is
-           the distance of the plan itself. -->
+      <!-- Everyone coming says where they are and how far they travel; places are suggested from it. -->
       <section v-if="canSetPreference" class="section" data-tst-id="plan-preference">
         <h2 class="section__title">Your location and travel distance</h2>
 
@@ -195,6 +203,8 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
           <PreferenceForm :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
         </div>
       </section>
+
+      <SuggestedPlaces :event="event" :can-ask="canSetPreference" @updated="event = $event" />
 
       <!-- The link: only the creator gets it from the server. -->
       <section v-if="link !== '' && active" class="section" data-tst-id="plan-share">
@@ -225,7 +235,7 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
         <h2 class="section__title">Who is invited</h2>
 
         <p v-if="event.invitees.length === 0" class="empty" data-tst-id="plan-no-guests">
-          Nobody yet. Send the link above - whoever accepts appears here.
+          {{ active ? 'Nobody yet. Send the link above - whoever accepts appears here.' : 'Nobody joined this plan.' }}
         </p>
 
         <ul v-else class="card people">
@@ -290,7 +300,16 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
   padding: 22px;
 }
 
-.plan__cancelled {
+/* "Over" is a plain fact; "cancelled" is shown as a warning (form-error adds the colour). */
+.plan__closed {
+  padding: 10px 14px;
+  border-radius: var(--radius-s);
+  background: var(--c-surface-soft);
+  color: var(--c-ink-soft);
+  font-size: 0.9rem;
+}
+
+.plan__closed {
   margin-bottom: 16px;
 }
 

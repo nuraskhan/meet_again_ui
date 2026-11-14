@@ -53,7 +53,9 @@ export const api = {
   events: () => get<EventDto[]>('/event/list'),
   event: (eventId: number) => get<EventDto>('/event/' + eventId),
   cancelEvent: (eventId: number) => post<void>('/event/' + eventId + '/cancel'),
-  /** A guest says where they are and how far they travel, for this event. */
+  /** "Suggest places": the server looks for the best places and keeps the answer with the event. */
+  refreshSuggestions: (eventId: number) => post<EventDto>('/event/' + eventId + '/suggestion/refresh'),
+  /** A participant says where they are and how far they travel, for this event. */
   savePreference: (eventId: number, request: SavePreferenceRequest) =>
     post<EventDto>('/event/' + eventId + '/preference', request),
   /** The invitation a link leads to. Works without being logged in. */

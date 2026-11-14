@@ -72,7 +72,11 @@ export interface EventTypeInfo {
 }
 
 export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED'
-export type EventStatus = 'ACTIVE' | 'CANCELLED'
+/**
+ * ACTIVE - open; CANCELLED - called off by its creator; EXPIRED - its last date has passed (set by
+ * the server).
+ */
+export type EventStatus = 'ACTIVE' | 'CANCELLED' | 'EXPIRED'
 
 export interface Invitee {
   invitationId: number
@@ -131,6 +135,10 @@ export interface EventDto extends EventFacts {
   invitees: Invitee[]
   /** What the current user said about themselves for this event; null until they say it. */
   myPreference: Preference | null
+  /** When places were last suggested; null = never. */
+  suggestedAt: string | null
+  /** The places suggested, best first. Empty while never suggested, and when nothing was found. */
+  suggestions: Suggestion[]
 }
 
 /** An event as anyone with its link sees it, logged in or not: no ids, no guest names. */
@@ -179,4 +187,38 @@ export interface ChatMessage {
   authorName: string
   text: string
   createdAt: string
+}
+
+/**
+ * A place suggested for an event. The distances are miles as the crow flies, measured when the
+ * suggestions were computed, from the people whose location was known then.
+ */
+export interface Suggestion {
+  /** 1 = the best. */
+  rank: number
+  placeId: number
+  name: string
+  category: EventTypeCode
+  description: string | null
+  address: string
+  latitude: number
+  longitude: number
+  /** How good the place is, 0 to 5. */
+  rating: number
+  priceMin: number
+  priceMax: number
+  website: string | null
+  phone: string | null
+  averageDistanceMi: number
+  farthestDistanceMi: number
+  /** Each of those people is within their own travel radius. */
+  withinEveryonesReach: boolean
+  /** The prices of the place overlap the budget of the event. */
+  fitsBudget: boolean
+  /** How many people's locations the suggestion is based on. */
+  participantsConsidered: number
+  /** From the current user's own saved location; null if they gave none. */
+  myDistanceMi: number | null
+  /** An invented demonstration place, not a real business. */
+  sample: boolean
 }

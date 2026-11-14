@@ -93,7 +93,7 @@ async function accept(): Promise<void> {
       <p v-if="crowd !== ''" class="small muted invite-page__crowd" data-tst-id="invite-crowd">{{ crowd }}</p>
 
       <p v-if="!active" class="form-error invite-page__actions" data-tst-id="invite-cancelled">
-        This plan was cancelled.
+        {{ event.status === 'EXPIRED' ? 'This plan is over.' : 'This plan was cancelled.' }}
       </p>
 
       <!-- Logged in: one button. -->

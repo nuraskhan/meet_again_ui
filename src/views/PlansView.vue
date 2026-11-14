@@ -23,6 +23,12 @@ const plans = computed<EventDto[]>(() => {
   return events.value.filter((event) => !waiting.has(event.id))
 })
 
+/** Still on: what the page is mostly about. */
+const upcoming = computed<EventDto[]>(() => plans.value.filter((event) => event.status === 'ACTIVE'))
+
+/** Over or called off: kept below, out of the way. */
+const closed = computed<EventDto[]>(() => plans.value.filter((event) => event.status !== 'ACTIVE'))
+
 onMounted(load)
 
 async function load(): Promise<void> {
@@ -62,6 +68,9 @@ async function answer(invitation: Invitation, accept: boolean): Promise<void> {
 function standing(event: EventDto): { text: string; kind: string } {
   if (event.status === 'CANCELLED') {
     return { text: 'Cancelled', kind: 'badge--no' }
+  }
+  if (event.status === 'EXPIRED') {
+    return { text: 'Past', kind: '' }
   }
 
   const mine = event.invitees.find((invitee) => invitee.userId === auth.state.userId)
@@ -140,12 +149,11 @@ function standing(event: EventDto): { text: string; kind: string } {
       <section :class="{ section: invitations.length > 0 }">
         <h2 v-if="invitations.length > 0" class="section__title">Your plans</h2>
 
-        <div v-if="plans.length > 0" class="stack">
+        <div v-if="upcoming.length > 0" class="stack">
           <RouterLink
-            v-for="event in plans"
+            v-for="event in upcoming"
             :key="event.id"
             class="card card--link"
-            :class="{ 'plan--off': event.status === 'CANCELLED' }"
             :to="{ name: 'plan', params: { eventId: event.id } }"
             data-tst-id="plan-card"
           >
@@ -161,9 +169,33 @@ function standing(event: EventDto): { text: string; kind: string } {
         </div>
 
         <div v-else-if="invitations.length === 0" class="empty" data-tst-id="plans-empty">
-          <p class="plans__empty-title">Nothing planned yet</p>
-          <p>Send the first invitation - it takes a minute.</p>
+          <p class="plans__empty-title">{{ closed.length > 0 ? 'Nothing coming up' : 'Nothing planned yet' }}</p>
+          <p>{{ closed.length > 0 ? 'Time for a new one?' : 'Send the first invitation - it takes a minute.' }}</p>
           <RouterLink class="btn plans__empty-button" :to="{ name: 'plan-new' }">Invite friends</RouterLink>
+        </div>
+      </section>
+
+      <!-- What is over or was called off: still there to look at, out of the way. -->
+      <section v-if="closed.length > 0" class="section" data-tst-id="plans-closed">
+        <h2 class="section__title">Past and cancelled</h2>
+
+        <div class="stack">
+          <RouterLink
+            v-for="event in closed"
+            :key="event.id"
+            class="card card--link plan--off"
+            :to="{ name: 'plan', params: { eventId: event.id } }"
+            data-tst-id="plan-card-closed"
+          >
+            <EventSummary :event="event" />
+
+            <div class="row plan__foot">
+              <span class="badge" :class="standing(event).kind">{{ standing(event).text }}</span>
+              <span class="small muted">
+                {{ event.creatorId === auth.state.userId ? 'You invited' : event.creatorName + ' invited' }}
+              </span>
+            </div>
+          </RouterLink>
         </div>
       </section>
     </template>
