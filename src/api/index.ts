@@ -75,8 +75,22 @@ export const api = {
         (beforeId === null ? '' : '&beforeId=' + beforeId),
     ),
   /** Joining a public event from the feed. */
-  joinPublicEvent: (eventId: number) => post<EventDto>('/event/' + eventId + '/join'),
-  /** A guest who is coming changes their mind and leaves the chat. They may join again. */
+  /**
+   * Asking to join a public plan from the feed. The answer says where the caller stands now:
+   * REQUESTED - the organiser has to approve; ACCEPTED - they were invited and are coming.
+   */
+  joinPublicEvent: (eventId: number) =>
+    post<{ standing: 'REQUESTED' | 'ACCEPTED' | 'CREATOR' }>('/event/' + eventId + '/join'),
+  /** The organiser lets in someone who asked to join. */
+  approveJoinRequest: (eventId: number, userId: number) =>
+    post<EventDto>('/event/' + eventId + '/request/' + userId + '/approve'),
+  /** The organiser says no to someone who asked to join. They may ask again. */
+  declineJoinRequest: (eventId: number, userId: number) =>
+    post<EventDto>('/event/' + eventId + '/request/' + userId + '/decline'),
+  /**
+   * A guest who is coming changes their mind and leaves the chat. They may join again.
+   * Someone whose request to join is still waiting takes it back with the same call.
+   */
   leaveEvent: (eventId: number) => post<void>('/event/' + eventId + '/leave'),
   /** The creator takes a guest out. That person cannot join again. */
   removeGuest: (eventId: number, userId: number) =>

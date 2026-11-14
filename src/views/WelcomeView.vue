@@ -4,6 +4,7 @@
 import type { Component } from 'vue'
 import { Calendar, Clock, Compass, MapPin, MessageCircle, Star, Utensils, Wallet } from 'lucide-vue-next'
 import HangeloLogo from '@/components/HangeloLogo.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const STEPS: { title: string; text: string }[] = [
   {
@@ -56,6 +57,7 @@ const YEAR: number = new Date().getFullYear()
 
         <span class="app-grow"></span>
 
+        <ThemeToggle />
         <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'login' }" data-tst-id="welcome-login">
           Log in
         </RouterLink>

@@ -37,8 +37,8 @@ and what to do next.
 
 1. **Content first, chrome last.** People, plans and photos carry the page. Bars, borders and
    labels stay quiet.
-2. **One accent, one meaning.** Blue means "the main action here" or "new for you". Never
-   decoration. At most one filled blue button in view.
+2. **One accent, one meaning.** The accent - the earth brown of the logo - means "the main action here" or "new for you". Never
+   decoration. At most one filled accent button in view.
 3. **Black and white do the rest.** Hierarchy comes from size, weight and space - not from colour.
 4. **Calm structure, bold moments.** Lists, forms and settings are calm and airy. The feed and
    profiles are photo-led: large images, heavy titles, little else.
@@ -64,7 +64,7 @@ The result must be recognisably its own product.
 - **Desktop first.** Design at 1440 px wide. Then show how it adapts at 1024 px (tablet) and
   390 px (phone). The phone version is a real layout, not a shrunk one.
 - **Two themes**, light and dark, following the system setting. Design both for every page.
-- **Colour:** only the tokens of the design system. Black, white, greys, one blue, and the three
+- **Colour:** only the tokens of the design system. Black, white, greys, one accent (earth brown), and the three
   state colours (success, warning, danger) used only for state.
 - **Type:** the system font stack only. No web fonts.
 - **Icons:** one open-licence line set (Lucide), 1.5 px stroke, 20 px in text, 24 px alone. No

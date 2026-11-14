@@ -246,6 +246,36 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
   DECLINED: { text: 'Declined', kind: '' },
   PENDING: { text: 'Not answered', kind: 'hg-badge--warning' },
   REMOVED: { text: 'Removed', kind: '' },
+  REQUESTED: { text: 'Asks to join', kind: 'hg-badge--warning' },
+}
+
+/** People who asked to join from the feed and wait for an answer. Only the organiser gets them. */
+const requests = computed<Invitee[]>(() =>
+  (event.value?.invitees ?? []).filter((invitee) => invitee.status === 'REQUESTED'),
+)
+
+/** Everyone else in the list: invited, coming, declined, removed. */
+const guests = computed<Invitee[]>(() =>
+  (event.value?.invitees ?? []).filter((invitee) => invitee.status !== 'REQUESTED'),
+)
+
+/** The request being answered right now (the person's id), to disable its buttons. */
+const answeringRequest = ref<number | null>(null)
+
+async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> {
+  answeringRequest.value = invitee.userId
+  try {
+    event.value = approve
+      ? await api.approveJoinRequest(props.eventId, invitee.userId)
+      : await api.declineJoinRequest(props.eventId, invitee.userId)
+    toastOk(approve ? invitee.displayName + ' is coming' : 'Declined')
+  } catch (caught) {
+    toastError(caught)
+    // The request may have been taken back meanwhile: show the plan as it is now.
+    await load()
+  } finally {
+    answeringRequest.value = null
+  }
 }
 </script>
 
@@ -401,6 +431,47 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
           </div>
         </section>
 
+        <!-- A public plan is joined by asking: the organiser lets people in one by one. -->
+        <section v-if="isCreator && active && requests.length > 0" data-tst-id="plan-requests">
+          <h2 class="plan__rail-title">Ask to join <span class="hg-count">{{ requests.length }}</span></h2>
+          <ul class="hg-list plan__requests">
+            <li
+              v-for="invitee in requests"
+              :key="invitee.invitationId"
+              class="plan__request"
+              data-tst-id="plan-request"
+            >
+              <RouterLink
+                class="plan__request-who app-ink"
+                :to="{ name: 'person', params: { userId: invitee.userId } }"
+              >
+                <UserAvatar :name="invitee.displayName" :user-id="invitee.userId" :size="32" />
+                <span class="hg-row__title">{{ invitee.displayName }}</span>
+              </RouterLink>
+              <span class="plan__request-actions">
+                <button
+                  class="hg-btn hg-btn--primary hg-btn--sm"
+                  type="button"
+                  :disabled="answeringRequest === invitee.userId"
+                  data-tst-id="plan-request-approve"
+                  @click="answerRequest(invitee, true)"
+                >
+                  <span>Approve</span>
+                </button>
+                <button
+                  class="hg-btn hg-btn--outline hg-btn--sm"
+                  type="button"
+                  :disabled="answeringRequest === invitee.userId"
+                  data-tst-id="plan-request-decline"
+                  @click="answerRequest(invitee, false)"
+                >
+                  <span>Decline</span>
+                </button>
+              </span>
+            </li>
+          </ul>
+        </section>
+
         <section>
           <h2 class="plan__rail-title plan__rail-title--tight">People</h2>
           <p class="plan__counts hg-num" data-tst-id="plan-people-counts">{{ peopleCounts }}</p>
@@ -425,7 +496,7 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
             </li>
 
             <li
-              v-for="invitee in event.invitees"
+              v-for="invitee in guests"
               :key="invitee.invitationId"
               class="hg-row plan__person"
               :class="{ 'plan__person--confirming': removing === invitee.userId }"
@@ -679,6 +750,40 @@ const STATUS_LOOK: Record<Invitee['status'], { text: string; kind: string }> = {
 }
 
 /* ---- people ---- */
+.plan__rail-title .hg-count {
+  margin-left: var(--s-1);
+  vertical-align: middle;
+}
+
+.plan__requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.plan__request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-m);
+  background: var(--c-accent-soft);
+}
+
+.plan__request-who {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.plan__request-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
 .plan__counts {
   margin-bottom: var(--s-2);
   color: var(--c-ink-soft);

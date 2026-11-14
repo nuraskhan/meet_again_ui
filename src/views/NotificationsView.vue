@@ -5,7 +5,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
-import { Ban, Bell, Calendar, Check, LogIn, LogOut, UserCheck, UserPlus, X } from 'lucide-vue-next'
+import { Ban, Bell, Calendar, Check, Hand, LogIn, LogOut, UserCheck, UserPlus, X } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import type { AppNotification, NotificationKind } from '@/api/types'
@@ -30,6 +30,9 @@ const KIND_ICON: Record<NotificationKind, Component> = {
   GUEST_LEFT: LogOut,
   REMOVED_FROM_EVENT: LogOut,
   EVENT_CANCELLED: Ban,
+  JOIN_REQUESTED: Hand,
+  JOIN_APPROVED: Check,
+  JOIN_DECLINED: X,
 }
 
 interface DayGroup {
@@ -130,6 +133,9 @@ function target(notification: AppNotification): RouteLocationRaw {
     case 'REMOVED_FROM_EVENT':
       // The plan is closed to someone who was removed from it: its page would say "not found".
       return { name: 'plans' }
+    case 'JOIN_DECLINED':
+      // Not let in: the plan is not theirs to open. The feed is where they saw it.
+      return { name: 'feed' }
     default:
       return notification.eventId === null
         ? { name: 'plans' }

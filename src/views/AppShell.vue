@@ -9,6 +9,7 @@ import type { Component } from 'vue'
 import { Bell, Calendar, Compass, MessageCircle, Plus, Users } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import HangeloLogo from '@/components/HangeloLogo.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue'
 import { auth } from '@/stores/auth'
@@ -106,6 +107,9 @@ function bellName(): string {
         </RouterLink>
       </nav>
 
+      <!-- Wide screens have no top bar: the switch sits at the foot of the sidebar. -->
+      <span class="shell__theme"><ThemeToggle /></span>
+
       <RouterLink class="hg-account" :to="{ name: 'profile' }" title="My profile" data-tst-id="nav-profile">
         <UserAvatar
           :name="auth.state.profile?.displayName ?? '?'"
@@ -124,6 +128,8 @@ function bellName(): string {
       <RouterLink class="shell__logo app-grow" :to="{ name: 'plans' }" aria-label="Hangelo, my plans">
         <HangeloLogo />
       </RouterLink>
+
+      <ThemeToggle />
 
       <RouterLink
         class="hg-iconbtn hg-bell"
@@ -226,6 +232,16 @@ function bellName(): string {
 .shell__hint {
   color: var(--c-ink-soft);
   font: var(--t-small);
+}
+
+/* Pushed to the foot of the sidebar, right above the account (which no longer needs the push). */
+.shell__theme {
+  display: flex;
+  margin-top: auto;
+}
+
+.shell__theme + .hg-account {
+  margin-top: 0;
 }
 
 .shell__me {

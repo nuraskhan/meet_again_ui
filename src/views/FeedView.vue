@@ -63,12 +63,34 @@ async function pick(chosen: EventTypeCode | null): Promise<void> {
 async function join(item: FeedItem): Promise<void> {
   joining.value = item.id
   try {
-    await api.joinPublicEvent(item.id)
+    const answer = await api.joinPublicEvent(item.id)
+    if (answer.standing === 'REQUESTED') {
+      // A public plan is open to ask about: the organiser decides who comes.
+      item.myStanding = 'REQUESTED'
+      toastOk('Request sent. The organiser will answer.')
+      return
+    }
+    // Invited by name before: asking was their yes.
     toastOk('You are coming. The chat is open for you.')
     await router.push({ name: 'plan', params: { eventId: item.id } })
   } catch (caught) {
     toastError(caught)
     // The plan may have filled up or been cancelled meanwhile: show it as it is now.
+    await load(false)
+  } finally {
+    joining.value = null
+  }
+}
+
+/** Taking back a request that the organiser has not answered yet. */
+async function takeBack(item: FeedItem): Promise<void> {
+  joining.value = item.id
+  try {
+    await api.leaveEvent(item.id)
+    item.myStanding = 'DECLINED'
+    toastOk('Request taken back.')
+  } catch (caught) {
+    toastError(caught)
     await load(false)
   } finally {
     joining.value = null
@@ -271,6 +293,20 @@ function canOpen(item: FeedItem): boolean {
                 </RouterLink>
               </template>
 
+              <template v-else-if="item.myStanding === 'REQUESTED'">
+                <span class="hg-badge hg-badge--warning" data-tst-id="feed-requested">Request sent</span>
+                <button
+                  class="hg-btn hg-btn--quiet"
+                  :class="{ 'is-loading': joining === item.id }"
+                  type="button"
+                  :disabled="joining === item.id"
+                  data-tst-id="feed-take-back"
+                  @click="takeBack(item)"
+                >
+                  <span>Take back</span>
+                </button>
+              </template>
+
               <span v-else-if="item.myStanding === 'REMOVED'" class="hg-badge hg-badge--danger">
                 Not available to you
               </span>
@@ -288,7 +324,7 @@ function canOpen(item: FeedItem): boolean {
                 data-tst-id="feed-join"
                 @click="join(item)"
               >
-                <span>{{ item.myStanding === 'DECLINED' ? 'Join again' : 'Join' }}</span>
+                <span>{{ item.myStanding === 'DECLINED' ? 'Ask again' : 'Ask to join' }}</span>
               </button>
             </span>
           </div>

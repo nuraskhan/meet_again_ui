@@ -123,7 +123,11 @@ export interface EventTypeInfo {
  * PENDING - invited, not answered; ACCEPTED - coming; DECLINED - not coming by their own choice (may
  * join again); REMOVED - taken out by the creator (may not).
  */
-export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'REMOVED'
+/**
+ * REQUESTED: asked to join a public plan from the feed, the organiser has not answered. Not a
+ * guest yet. Only the organiser sees such a person in the list of a plan.
+ */
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'REMOVED' | 'REQUESTED'
 
 /** PRIVATE - only the invited; PUBLIC - shown in the feed, anyone can join. */
 export type EventVisibility = 'PRIVATE' | 'PUBLIC'
@@ -231,6 +235,10 @@ export interface Chat {
   title: string
   createdAt: string
   memberCount: number
+  /** The plan the chat belongs to; null for a chat without one. */
+  eventId: number | null
+  /** The kind of that plan, for its icon; null with eventId. */
+  eventType: EventTypeCode | null
 }
 
 export interface ChatMember {
@@ -318,6 +326,9 @@ export type NotificationKind =
   | 'GUEST_LEFT'
   | 'REMOVED_FROM_EVENT'
   | 'EVENT_CANCELLED'
+  | 'JOIN_REQUESTED'
+  | 'JOIN_APPROVED'
+  | 'JOIN_DECLINED'
 
 /**
  * Something that happened and concerns the logged-in person. (Not "Notification": that name is the

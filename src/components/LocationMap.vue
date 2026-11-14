@@ -207,9 +207,8 @@ function report(point: L.LatLng): void {
 
 /* The tiles stay OpenStreetMap's light ones; in the dark theme they are dimmed so that the map does
    not glare on a black page. */
-@media (prefers-color-scheme: dark) {
-  .location-map :deep(.leaflet-tile-pane) {
-    filter: saturate(0.6) brightness(0.7) contrast(1.1);
-  }
+.location-map :deep(.leaflet-tile-pane) {
+  /* Set per theme in assets/main.css: the theme may be chosen by hand, not only by the system. */
+  filter: var(--map-tile-filter);
 }
 </style>

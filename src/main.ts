@@ -7,6 +7,8 @@ import { auth, onLogout } from './stores/auth'
 // Loaded for what it starts: the stream of signals from the server and the count on the bell,
 // both following the session from here on.
 import './stores/notifications'
+// Loaded for what it starts: keeps the theme (light or dark) on the page.
+import './stores/theme'
 
 // When the session ends (the user logs out, or the server refuses the token), leave the private
 // pages.

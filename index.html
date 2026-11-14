@@ -7,6 +7,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Hangelo: invite your friends to hang out in a few taps.">
     <title>Hangelo</title>
+    <!-- The theme, before anything is drawn: the person's choice if they made one, the system
+         setting otherwise. Without this a dark page would flash white while the application
+         loads. The same rule lives in src/stores/theme.ts, which takes over afterwards. -->
+    <script>
+      (function () {
+        var theme = null
+        try { theme = localStorage.getItem('hangelo.theme') } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

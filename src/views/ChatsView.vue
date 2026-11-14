@@ -10,6 +10,7 @@ import { MessageCircle } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import { api } from '@/api'
 import type { Chat } from '@/api/types'
+import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import { toastError } from '@/stores/toast'
 
 const route = useRoute()
@@ -74,7 +75,8 @@ function day(iso: string): string {
             data-tst-id="chat-row"
           >
             <span class="hg-iconcircle">
-              <MessageCircle class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <EventTypeIcon v-if="chat.eventType !== null" :type="chat.eventType" />
+              <MessageCircle v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
             </span>
             <span class="hg-row__text chats__text">
               <span class="hg-row__title">{{ chat.title }}</span>

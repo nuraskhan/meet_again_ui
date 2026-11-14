@@ -10,7 +10,7 @@ Says where the person is, takes them anywhere in one click, and shows what is ne
 
 - **Sidebar**, 248 px, full height, `--c-surface-soft`, no shadow, a 1 px line on its right.
   - Top: the wordmark "hangelo" in `--t-title-3`, lower case, 24 px from the edges.
-  - A primary button "New plan" (icon `plus`), full width of the sidebar. This is the one blue
+  - A primary button "New plan" (icon `plus`), full width of the sidebar. This is the one accent
     button of the shell; a page that has its own main action shows it as neutral.
   - Navigation items: Feed, Plans, Friends, Chats, Notifications. Notifications carries the count
     pill when something is unread.
@@ -46,7 +46,7 @@ Says where the person is, takes them anywhere in one click, and shows what is ne
 - 1024: the sidebar is 72 px - icons only with tooltips, "New plan" becomes an icon button, the
   account row is the avatar alone.
 - 390: no sidebar. A top bar with the page title and, at the right, the bell with its pill and the
-  avatar. A bottom tab bar: Feed, Plans, New plan (centre, the blue one), Friends, Chats.
+  avatar. A bottom tab bar: Feed, Plans, New plan (centre, the accent one), Friends, Chats.
 
 ## Prompt
 

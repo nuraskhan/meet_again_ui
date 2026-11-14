@@ -7,7 +7,7 @@ Token names are the CSS variable names the application will use.
 
 ## 1. Colour
 
-Black, white, greys; one blue; three state colours.
+Black, white, greys; one accent, the earth brown of the logo; three state colours.
 
 | Token | Light | Dark | Used for |
 |-------|-------|------|----------|
@@ -20,10 +20,10 @@ Black, white, greys; one blue; three state colours.
 | `--c-ink-soft` | `#5C5C63` | `#A1A1A8` | Secondary text |
 | `--c-ink-faint` | `#8A8A91` | `#6E6E76` | Placeholders, timestamps (never the only carrier of meaning) |
 | `--c-on-ink` | `#FFFFFF` | `#000000` | Text on `--c-ink` |
-| `--c-accent` | `#0B5FFF` | `#0B5FFF` | Fill of the main button, unread dot, own chat bubble |
-| `--c-accent-strong` | `#0047D6` | `#3D7DFF` | The same, hovered or pressed |
-| `--c-accent-text` | `#0B5FFF` | `#4C8DFF` | Blue as text or icon: links, active navigation |
-| `--c-accent-soft` | `#E8F0FF` | `#0D1F40` | Tinted background of something selected or new |
+| `--c-accent` | `#8A5A2B` | `#8A5A2B` | Fill of the main button, unread dot, own chat bubble |
+| `--c-accent-strong` | `#6F4520` | `#A06B36` | The same, hovered or pressed |
+| `--c-accent-text` | `#7A4E22` | `#C9A06A` | The accent as text or icon: links, active navigation |
+| `--c-accent-soft` | `#F5ECE1` | `#2A1F12` | Tinted background of something selected or new |
 | `--c-on-accent` | `#FFFFFF` | `#FFFFFF` | Text on `--c-accent` |
 | `--c-success` | `#1A7F37` | `#3FB950` | "Coming", confirmed |
 | `--c-warning` | `#9A6700` | `#D29922` | "Not answered yet", e-mail not confirmed |
@@ -34,7 +34,7 @@ Black, white, greys; one blue; three state colours.
 | `--c-scrim` | `rgb(0 0 0 / 40%)` | `rgb(0 0 0 / 60%)` | Behind a dialog |
 | `--c-photo-shade` | gradient, transparent to `rgb(0 0 0 / 70%)` | same | Under text placed on a photo |
 
-Contrast, calculated: white on `--c-accent` 5.1:1; `--c-accent-text` on the dark page 6.6:1;
+Contrast, calculated: white on `--c-accent` 5.9:1; `--c-accent-text` on the dark page 8.6:1;
 `--c-ink-soft` on the light page 6.5:1. Check every other pair you use against the 4.5:1 rule.
 
 ### Brand mark
@@ -54,7 +54,7 @@ version.
 
 Rules of use:
 
-- Blue: the one main action in view, links, the active navigation item, unread marks, the user's
+- The accent: the one main action in view, links, the active navigation item, unread marks, the user's
   own chat bubbles. Nothing else.
 - A second button in the same view is neutral (`--c-ink` fill, or outline).
 - State colours appear only with a word or an icon beside them.
@@ -119,7 +119,7 @@ Each has the states: default, hover, focus, pressed, disabled, and loading where
 | Component | Description |
 |-----------|-------------|
 | Button, primary | `--c-accent` fill, white text, `--r-m`, 40 high, `--t-body-strong`. One per view. |
-| Button, neutral | `--c-ink` fill, `--c-on-ink` text. The main action where blue is already used, or a confirmation. |
+| Button, neutral | `--c-ink` fill, `--c-on-ink` text. The main action where the accent is already used, or a confirmation. |
 | Button, outline | 1 px `--c-line`, `--c-ink` text. Secondary actions. |
 | Button, quiet | No border, `--c-ink-soft` text, `--c-surface-soft` on hover. Tertiary: "Cancel", "Earlier". |
 | Button, danger | Outline in `--c-danger`; filled only inside its confirmation. |

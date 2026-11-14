@@ -7,11 +7,12 @@
 // under their name once, with the time under the last of it.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowDown, ArrowLeft, ArrowUp, MessageCircle } from 'lucide-vue-next'
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, ChevronRight, MessageCircle, X } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { Chat, ChatMember, ChatMessage, ChatMessageSignal } from '@/api/types'
 import { onSignal, RECONNECTED } from '@/stores/signal'
+import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { auth } from '@/stores/auth'
 import { toastError } from '@/stores/toast'
@@ -46,6 +47,8 @@ interface Day {
 
 const chat = ref<Chat | null>(null)
 const members = ref<ChatMember[]>([])
+/** The panel under the header: the plan the chat belongs to and who is in the chat. */
+const showAbout = ref<boolean>(false)
 /** Oldest first, the way they are read. The server sends newest first. */
 const messages = ref<ChatMessage[]>([])
 const loading = ref<boolean>(true)
@@ -293,11 +296,25 @@ function time(iso: string): string {
       <RouterLink class="hg-iconbtn chat__back" :to="{ name: 'chats' }" aria-label="All chats">
         <ArrowLeft class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
       </RouterLink>
-      <div class="app-grow">
-        <h2 class="chat__title">{{ chat?.title ?? 'Chat' }}</h2>
-        <p v-if="memberNames !== ''" class="chat__members">{{ memberNames }}</p>
-      </div>
-      <span v-if="members.length > 0" class="hg-stack chat__faces" aria-hidden="true">
+      <!-- The name of the chat and the faces are one button: it opens what the chat is about -
+           its plan and its people. -->
+      <button
+        class="chat__about-toggle app-grow"
+        type="button"
+        :aria-expanded="showAbout"
+        aria-controls="chat-about"
+        data-tst-id="chat-about-toggle"
+        @click="showAbout = !showAbout"
+      >
+        <span class="chat__title">{{ chat?.title ?? 'Chat' }}</span>
+        <span v-if="memberNames !== ''" class="chat__members">{{ memberNames }}</span>
+      </button>
+      <span
+        v-if="members.length > 0"
+        class="hg-stack chat__faces"
+        aria-hidden="true"
+        @click="showAbout = !showAbout"
+      >
         <UserAvatar
           v-for="member in members.slice(0, FACES)"
           :key="member.userId"
@@ -311,6 +328,55 @@ function time(iso: string): string {
         </span>
       </span>
     </header>
+
+    <section v-if="showAbout" id="chat-about" class="chat__about" data-tst-id="chat-about">
+      <div class="chat__about-head">
+        <h3 class="chat__about-title">About this chat</h3>
+        <button class="hg-iconbtn" type="button" aria-label="Close" @click="showAbout = false">
+          <X class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        </button>
+      </div>
+
+      <!-- The plan the chat was made for: one click away. -->
+      <RouterLink
+        v-if="chat !== null && chat.eventId !== null"
+        class="hg-card hg-card--link chat__plan"
+        :to="{ name: 'plan', params: { eventId: chat.eventId } }"
+        data-tst-id="chat-plan"
+      >
+        <span class="hg-iconcircle">
+          <EventTypeIcon v-if="chat.eventType !== null" :type="chat.eventType" />
+          <CalendarDays v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        </span>
+        <span class="app-grow chat__plan-text">
+          <span class="hg-row__title">{{ chat.title }}</span>
+          <span class="hg-row__sub">Open the plan: dates, places, who is coming</span>
+        </span>
+        <ChevronRight class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+      </RouterLink>
+
+      <h4 class="chat__about-sub">{{ members.length }} {{ members.length === 1 ? 'member' : 'members' }}</h4>
+      <ul class="hg-list chat__people">
+        <li v-for="member in members" :key="member.userId">
+          <RouterLink
+            class="hg-row hg-row--link chat__person"
+            :to="{ name: 'person', params: { userId: member.userId } }"
+            data-tst-id="chat-member"
+          >
+            <UserAvatar
+              :name="member.displayName"
+              :user-id="member.userId"
+              :avatar-url="member.avatarUrl"
+              :size="32"
+            />
+            <span class="hg-row__title app-grow">
+              {{ member.displayName }}
+              <span v-if="member.userId === auth.state.userId" class="chat__you">(you)</span>
+            </span>
+          </RouterLink>
+        </li>
+      </ul>
+    </section>
 
     <!-- Loading: the shape of a conversation, so the pane does not jump when it arrives. -->
     <div v-if="loading" class="chat__loading" aria-busy="true" aria-label="Loading messages">
@@ -442,6 +508,85 @@ function time(iso: string): string {
 /* The way back to the list: only where the list is not on the screen (a phone). */
 .chat__back {
   display: none;
+}
+
+/* The title and the member names: a button that looks like text. */
+.chat__about-toggle {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--s-1) var(--s-2);
+  margin: calc(-1 * var(--s-1)) calc(-1 * var(--s-2));
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--c-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat__about-toggle:hover {
+  background: var(--c-surface-soft);
+}
+
+.chat__faces {
+  cursor: pointer;
+}
+
+/* What the chat is about: under the header, above the messages, scrolling by itself if long. */
+.chat__about {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-height: 60%;
+  padding: var(--s-4) var(--s-5);
+  overflow-y: auto;
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-surface-soft);
+}
+
+.chat__about-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat__about-title {
+  font: var(--t-title-3);
+}
+
+.chat__about-sub {
+  color: var(--c-ink-soft);
+  font: var(--t-caption);
+}
+
+.chat__plan {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.chat__plan-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat__people {
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  background: var(--c-surface);
+  overflow: hidden;
+}
+
+.chat__person {
+  color: var(--c-ink);
+}
+
+.chat__you {
+  color: var(--c-ink-soft);
+  font-weight: 400;
 }
 
 .chat__title {

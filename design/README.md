@@ -11,7 +11,8 @@ look, written to be pasted into an AI design or code tool.
 | Who reads the prompt | An AI design/code tool |
 | Screen | Desktop first; tablet and phone are adaptations |
 | Look | Light and dark, following the system; calm structure, photo-led on the feed and profiles |
-| Colour | Black and white, plus one accent: electric blue |
+| Colour | Black and white, plus one accent: the earth brown of the logo (first electric blue; changed) |
+| Theme switch | A switch between light and dark in the bar; until it is pressed the system setting decides |
 | Audience and voice | Any adult; plain, polite, no slang, no emoji |
 | Type | The system font only |
 | References | BeReal, Apple and similar - for principles, never copied |

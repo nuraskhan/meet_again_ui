@@ -22,7 +22,7 @@ Explains in one screen what the application does and gets the visitor to registe
 - Closing band: the headline repeated shorter and the primary button.
 - Footer: the wordmark and the year. Nothing else.
 
-Black and white carry the page; blue appears only on "Create account".
+Black and white carry the page; the accent appears only on "Create account".
 
 ## Elements
 
