@@ -167,7 +167,7 @@ async function submit(): Promise<void> {
     </div>
 
     <!-- A picture of the product made of the product's own pieces; purely decorative.
-         The same picture is the hero of WelcomeView. -->
+         The same pieces stand beside the steps of WelcomeView. -->
     <div class="auth__side" aria-hidden="true">
       <div class="auth__art">
         <div class="hg-card hg-card--lg auth__art-plan">
