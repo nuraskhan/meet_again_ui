@@ -4,7 +4,7 @@
 // the chat, the link and the people in a rail on the right (under the rest on a narrow screen).
 // After the plan is over its organiser marks here who said "coming" and did not come.
 
-import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import {
   CalendarX,
   Check,
@@ -26,12 +26,14 @@ import { onSignal } from '@/stores/signal'
 import EventPicture from '@/components/EventPicture.vue'
 import EventSummary from '@/components/EventSummary.vue'
 import PlacePicker from '@/components/PlacePicker.vue'
+import PlanSteps from '@/components/PlanSteps.vue'
 import ChatView from '@/views/ChatView.vue'
 import PreferenceForm from '@/components/PreferenceForm.vue'
 import SuggestedPlaces from '@/components/SuggestedPlaces.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { EVENT_TYPE_LOOK, inviteLink } from '@/lib/format'
+import { markLinkSent, planSteps, wasLinkSent, type PlanStep } from '@/lib/planSteps'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
@@ -67,6 +69,72 @@ const mine = computed<Invitee | undefined>(() =>
 const canSetPreference = computed<boolean>(
   () => active.value && (isCreator.value || (mine.value !== undefined && mine.value.status !== 'DECLINED')),
 )
+
+/** What this person has done in the plan and what to do now: the "What's next" guide. */
+const steps = computed<PlanStep[]>(() =>
+  event.value === null ? [] : planSteps(event.value, auth.state.userId, linkSent.value),
+)
+
+/** The organiser has shared or copied the link: inviting counts as done before the first guest appears. */
+const linkSent = ref<boolean>(wasLinkSent(props.eventId))
+watch(
+  () => props.eventId,
+  (eventId) => {
+    linkSent.value = wasLinkSent(eventId)
+  },
+)
+
+function rememberLinkSent(): void {
+  markLinkSent(props.eventId)
+  linkSent.value = true
+}
+
+/** The block of suggested places, to press its button from the guide. */
+const places = ref<InstanceType<typeof SuggestedPlaces> | null>(null)
+/** The section with the location form, to bring it into view from the guide. */
+const preferenceSection = ref<HTMLElement | null>(null)
+
+/** The location form itself, to unfold it when it shows only the saved line. */
+const preferenceForm = ref<InstanceType<typeof PreferenceForm> | null>(null)
+
+/** "Set my location" in the guide: the form comes into view, open, with the cursor in its first field. */
+async function goToPreference(): Promise<void> {
+  const section: HTMLElement | null = preferenceSection.value
+  if (section === null) {
+    return
+  }
+  preferenceForm.value?.open()
+  await nextTick()
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  section.querySelector<HTMLInputElement>('input[type="text"]')?.focus({ preventScroll: true })
+}
+
+/** Places were suggested already: the guide then leads to them instead of asking again. */
+const hasSuggestions = computed<boolean>(() => (event.value?.suggestions.length ?? 0) > 0)
+
+/**
+ * "Suggest places" in the guide: the same as the button of "Where to go", which comes into view.
+ * With suggestions already there ("See the suggestions") it only brings them into view.
+ */
+function suggestPlaces(): void {
+  document.getElementById(placesId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  if (!hasSuggestions.value) {
+    void places.value?.ask()
+  }
+}
+
+/** The chat of the plan in the rail, to bring it into view from the guide. */
+const chatSection = ref<HTMLElement | null>(null)
+
+/** "Say hello in the chat" in the guide: the chat comes into view with the cursor in its field. */
+function goToChat(): void {
+  const section: HTMLElement | null = chatSection.value
+  if (section === null) {
+    return
+  }
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  section.querySelector<HTMLElement>('textarea, input[type="text"]')?.focus({ preventScroll: true })
+}
 
 /** "Up to 5 mi from Brooklyn"; without a typed place only the distance is known to the others. */
 function preferenceLine(place: string | null, shared: boolean, radiusMi: number | null): string {
@@ -133,6 +201,8 @@ const peopleCounts = computed<string>(() => {
 
 /** Ties the label of the share link to its field. */
 const linkId: string = useId()
+/** The anchor of "Where to go", for the guide to scroll to. */
+const placesId: string = useId()
 
 /** The address to send to people; empty for everyone but the creator. */
 const link = computed<string>(() => {
@@ -146,6 +216,7 @@ async function copyLink(): Promise<void> {
   try {
     await navigator.clipboard.writeText(link.value)
     copied.value = true
+    rememberLinkSent()
     window.setTimeout(() => {
       copied.value = false
     }, 2000)
@@ -225,6 +296,7 @@ async function shareLink(): Promise<void> {
   if (typeof navigator.share === 'function') {
     try {
       await navigator.share({ title, text: 'Join my plan: ' + title, url: link.value })
+      rememberLinkSent()
       return
     } catch (caught) {
       // The person closed the sheet: nothing to do. Anything else: fall back to copying.
@@ -517,32 +589,99 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           </RouterLink>
         </header>
 
-        <!-- The invitee has not answered: the two buttons are the whole point of the page. -->
-        <div v-if="active && mine?.status === 'PENDING'" class="hg-card hg-card--accent plan__answer">
-          <p class="plan__answer-q">Are you coming?</p>
-          <div class="plan__answer-actions">
+        <!-- What's next: the steps of the plan for this person, the one to do now with its button. -->
+        <PlanSteps :steps="steps">
+          <template #default="{ step }">
+            <!-- A guest who has not answered: the two buttons are the whole point of the page. -->
+            <template v-if="step.id === 'answer'">
+              <button
+                class="hg-btn hg-btn--primary"
+                :class="{ 'is-loading': answering === 'accept' }"
+                type="button"
+                :disabled="busy"
+                data-tst-id="plan-accept"
+                @click="answer(true)"
+              >
+                <span>I'm coming</span>
+              </button>
+              <button
+                class="hg-btn hg-btn--outline"
+                :class="{ 'is-loading': answering === 'decline' }"
+                type="button"
+                :disabled="busy"
+                data-tst-id="plan-decline"
+                @click="answer(false)"
+              >
+                <span>I can't</span>
+              </button>
+            </template>
+
+            <template v-else-if="step.id === 'invite'">
+              <button class="hg-btn hg-btn--primary" type="button" data-tst-id="plan-step-share" @click="shareLink">
+                <Share2 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <span>Share the link</span>
+              </button>
+              <button class="hg-btn hg-btn--outline" type="button" data-tst-id="plan-step-copy" @click="copyLink">
+                <Check v-if="copied" class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <Link v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <span>{{ copied ? 'Copied' : 'Copy link' }}</span>
+              </button>
+            </template>
+
             <button
+              v-else-if="step.id === 'where'"
               class="hg-btn hg-btn--primary"
-              :class="{ 'is-loading': answering === 'accept' }"
               type="button"
-              :disabled="busy"
-              data-tst-id="plan-accept"
-              @click="answer(true)"
+              data-tst-id="plan-step-where"
+              @click="goToPreference"
             >
-              <span>I'm coming</span>
+              <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Set my location</span>
             </button>
+
+            <!-- The organiser: places that suit everyone, or any place of their own choosing. -->
+            <template v-else-if="step.id === 'place'">
+              <button
+                class="hg-btn hg-btn--primary"
+                type="button"
+                data-tst-id="plan-step-place"
+                @click="suggestPlaces"
+              >
+                <span>{{ hasSuggestions ? 'See the suggestions' : 'Suggest places' }}</span>
+              </button>
+              <button
+                class="hg-btn hg-btn--outline"
+                type="button"
+                :disabled="placeBusy"
+                data-tst-id="plan-step-choose"
+                @click="pickerOpen = true"
+              >
+                <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <span>Choose myself</span>
+              </button>
+            </template>
+
+            <!-- A guest who is coming: the place is the organiser's to choose; the chat is open. -->
             <button
+              v-else-if="step.id === 'wait'"
               class="hg-btn hg-btn--outline"
-              :class="{ 'is-loading': answering === 'decline' }"
               type="button"
-              :disabled="busy"
-              data-tst-id="plan-decline"
-              @click="answer(false)"
+              data-tst-id="plan-step-chat"
+              @click="goToChat"
             >
-              <span>I can't</span>
+              <MessageCircle class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Say hello in the chat</span>
             </button>
-          </div>
-        </div>
+          </template>
+
+          <template #done>
+            <p class="plan__allset" data-tst-id="plan-allset">
+              <b>All set.</b>
+              {{ event.place !== null ? 'See you at ' + event.place.name + '.' : '' }}
+              {{ inChat ? 'Anything else is settled in the chat.' : '' }}
+            </p>
+          </template>
+        </PlanSteps>
 
         <section v-if="event.description || event.proposedTimes.length > 1" class="plan__summary">
           <p v-if="event.description" class="plan__note">{{ event.description }}</p>
@@ -552,12 +691,17 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
         <!-- Everyone coming says where they are and how far they travel; places are suggested from it.
              It stands ABOVE the places: where a person is decides which places are near, so it is
              asked before a place is chosen or suggested, not after. -->
-        <section v-if="canSetPreference && isCreator" data-tst-id="plan-preference">
+        <section
+          v-if="canSetPreference && isCreator"
+          ref="preferenceSection"
+          class="plan__anchor"
+          data-tst-id="plan-preference"
+        >
           <h2 class="plan__title">Your location and distance</h2>
           <p v-if="event.myPreference === null" class="plan__todo" data-tst-id="plan-preference-todo">
-            Tell the others where you are coming from and how far you can go.
+            Put yourself on the map and say how far you can go.
           </p>
-          <PreferenceForm :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
+          <PreferenceForm ref="preferenceForm" :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
         </section>
 
         <!-- The venue. A plan that is closed and never had one says nothing about it. -->
@@ -677,6 +821,9 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
         </section>
 
         <SuggestedPlaces
+          :id="placesId"
+          ref="places"
+          class="plan__anchor"
           :event="event"
           :can-ask="canSetPreference"
           :can-choose="canChoosePlace"
@@ -926,7 +1073,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
 
         <!-- The chat of the plan, right here: reading and writing without leaving the page.
              The button at the top of the rail still opens it full size. -->
-        <section v-if="inChat" class="plan__chat-section" data-tst-id="plan-chat">
+        <section v-if="inChat" ref="chatSection" class="plan__chat-section plan__anchor" data-tst-id="plan-chat">
           <h2 class="plan__rail-title plan__rail-title--tight">Chat</h2>
           <div class="plan__chat">
             <ChatView :key="event.chatId" :chat-id="event.chatId" embedded />
@@ -1129,22 +1276,15 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
   overflow-wrap: anywhere;
 }
 
-/* ---- the answer bar ---- */
-.plan__answer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-3) var(--s-4);
+/* ---- the guide ---- */
+.plan__allset {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
-.plan__answer-q {
-  flex: 1 1 auto;
-  font: var(--t-title-3);
-}
-
-.plan__answer-actions {
-  display: flex;
-  gap: var(--s-2);
+/* A block the guide scrolls to: it stops below the top bar, not under it. */
+.plan__anchor {
+  scroll-margin-top: var(--s-8);
 }
 
 /* ---- the note and the dates ---- */
@@ -1490,14 +1630,6 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
 
 /* ---- phone: buttons take the whole width ---- */
 @media (max-width: 767px) {
-  .plan__answer-actions {
-    flex: 1 1 100%;
-  }
-
-  .plan__answer-actions .hg-btn {
-    flex: 1 1 0;
-  }
-
   .plan__end {
     align-items: stretch;
   }

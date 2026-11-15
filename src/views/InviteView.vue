@@ -136,6 +136,16 @@ async function accept(): Promise<void> {
           <ProposedTimes :times="event.proposedTimes" />
 
           <p v-if="crowd !== ''" class="invite-page__crowd" data-tst-id="invite-crowd">{{ crowd }}</p>
+
+          <!-- What saying yes leads to, so nobody presses a button blind. -->
+          <ol v-if="active" class="invite-page__steps" aria-label="How it works" data-tst-id="invite-steps">
+            <li><span class="invite-page__step-no hg-num" aria-hidden="true">1</span>Say you are in</li>
+            <li>
+              <span class="invite-page__step-no hg-num" aria-hidden="true">2</span>{{ event.creatorName }} chooses
+              the place
+            </li>
+            <li><span class="invite-page__step-no hg-num" aria-hidden="true">3</span>Talk it over in the chat</li>
+          </ol>
         </div>
 
         <div class="invite-page__foot">
@@ -241,6 +251,37 @@ async function accept(): Promise<void> {
   color: var(--c-ink-soft);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Three short steps in a row; one under another where the card is narrow. */
+.invite-page__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin: 0;
+  padding: var(--s-3) 0 0;
+  border-top: 1px solid var(--c-line);
+  list-style: none;
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+}
+
+.invite-page__steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.invite-page__step-no {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-full);
+  background: var(--c-surface-strong);
+  color: var(--c-ink);
+  font-weight: 600;
 }
 
 .invite-page__foot {

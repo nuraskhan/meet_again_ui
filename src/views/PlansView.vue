@@ -4,7 +4,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarDays, Clock, Globe, MapPin, Plus } from 'lucide-vue-next'
+import { ArrowRight, CalendarDays, Clock, Globe, MapPin, Plus } from 'lucide-vue-next'
 import { onSignal } from '@/stores/signal'
 import { api } from '@/api'
 import type { EventDto, Invitation, Invitee } from '@/api/types'
@@ -13,6 +13,7 @@ import EventSummary from '@/components/EventSummary.vue'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { EVENT_TYPE_LOOK, proposedTimesSummary } from '@/lib/format'
+import { nextStep, planSteps, wasLinkSent } from '@/lib/planSteps'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
@@ -97,6 +98,13 @@ function crowd(event: EventDto): string {
     return going + ' came'
   }
   return going + ' of ' + event.invitees.length + ' coming'
+}
+
+/** What this person should do in the plan now ("Invite people"); null = nothing is waiting for them. */
+function next(event: EventDto): string | null {
+  const step = nextStep(planSteps(event, auth.state.userId, wasLinkSent(event.id)))
+  // Waiting for the organiser is not this person's move: nothing to point at.
+  return step === null || step.waiting ? null : step.title
 }
 
 /** What happened to the plan or what the current user answered; null = nothing worth a badge. */
@@ -267,6 +275,12 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               </span>
               <span class="plans__count hg-num">{{ crowd(event) }}</span>
             </div>
+
+            <!-- The one thing waiting for this person in the plan. -->
+            <span v-if="next(event) !== null" class="plans__next" data-tst-id="plan-card-next">
+              <ArrowRight class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Next: {{ next(event) }}</span>
+            </span>
           </RouterLink>
         </div>
       </section>
@@ -366,6 +380,21 @@ function standing(event: EventDto): { text: string; kind: string } | null {
 </template>
 
 <style scoped>
+/* "Next: invite people" at the foot of a card: the accent says it is this person's move. */
+.plans__next {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--c-accent-text);
+  font: var(--t-body-strong);
+}
+
+.plans__next .hg-icon {
+  flex: none;
+  width: var(--s-4);
+  height: var(--s-4);
+}
+
 /* main.css colours every link, and every hovered link, as a text link: the links that are buttons
  * or cards keep their own colours. */
 .plans__new:hover {

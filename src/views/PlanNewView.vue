@@ -400,7 +400,8 @@ async function send(): Promise<void> {
           <section>
             <h2 class="new__title new__title--tight">When</h2>
             <p class="new__hint new__hint--above">
-              Offer several and let people choose. Leave empty to agree on the time in the chat.
+              Offer one or several; with several you settle on one together in the chat. Leave empty to
+              agree on the time there too.
             </p>
 
             <div class="app-stack app-stack--tight">

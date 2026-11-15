@@ -70,6 +70,13 @@ function fill(): void {
   }
 }
 
+/** The saved line unfolds into the form: the guide of the plan page ("What's next") asks for it. */
+function open(): void {
+  editing.value = true
+}
+
+defineExpose({ open })
+
 /** "Cancel" in the form opened by "Change": back to what is saved. */
 function stopEditing(): void {
   fill()
@@ -151,6 +158,10 @@ async function save(): Promise<void> {
     <MapPin class="hg-icon preference__saved-icon" :stroke-width="1.5" aria-hidden="true" />
     <span class="hg-row__text preference__saved-text">
       <span class="hg-row__title" data-tst-id="preference-located">{{ savedLine }}</span>
+      <!-- A name alone cannot be measured from: say so, or "Suggest places" fails without a reason in sight. -->
+      <span v-if="current.latitude === null" class="hg-row__sub" data-tst-id="preference-no-pin">
+        Not on the map yet - add a pin to get places picked for you
+      </span>
     </span>
     <button class="hg-btn hg-btn--quiet" type="button" data-tst-id="preference-change" @click="editing = true">
       Change
@@ -205,7 +216,7 @@ async function save(): Promise<void> {
             {{
               hasCoordinates
                 ? 'Pin set. Drag it or click the map to move it.'
-                : 'Click the map to drop a pin, or use your location.'
+                : 'Click the map to drop a pin, or use your location. Places are picked from the pin.'
             }}
           </span>
         </p>
