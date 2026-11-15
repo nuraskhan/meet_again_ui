@@ -3,6 +3,7 @@
 // One centred sentence and one button, then how it works: three steps, each beside a piece of the
 // product itself.
 
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
 import {
   ArrowDown,
@@ -46,11 +47,118 @@ const ANSWERS: { icon: Component; tone: string; label: string; value: string }[]
   { icon: MapPin, tone: 'sun', label: 'Travels', value: 'Up to 5 mi' },
 ]
 
-/** Pew Research Center, January 2025: American adults who have close friends. */
-const FIGURES: { value: string; text: string }[] = [
-  { value: '61%', text: 'text a close friend at least a few times a week' },
-  { value: '29%', text: 'see a close friend in person that often' },
+/** Pew Research Center, January 2025: American adults who have close friends. Per cent. */
+const FIGURES: { value: number; text: string }[] = [
+  { value: 61, text: 'text a close friend at least a few times a week' },
+  { value: 29, text: 'see a close friend in person that often' },
 ]
+
+// ---------------------------------------------------------------- the small moving things
+// The page is alive in four small ways: the pieces of the first screen lean after the pointer;
+// the sections appear as they are scrolled to; the figures count up; the match of the third step
+// can be tried with another day. Someone who asked the system for less motion gets none of the
+// movement, only the day switch.
+
+const reduceMotion: boolean = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** Where the pointer is over the first screen, -1..1 from its centre; the pieces shift by it. */
+const lean = reactive<{ x: number; y: number }>({ x: 0, y: 0 })
+
+function onHeroMove(event: PointerEvent): void {
+  if (reduceMotion || event.pointerType !== 'mouse') {
+    return
+  }
+  const box: DOMRect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  lean.x = ((event.clientX - box.left) / box.width) * 2 - 1
+  lean.y = ((event.clientY - box.top) / box.height) * 2 - 1
+}
+
+function onHeroLeave(): void {
+  lean.x = 0
+  lean.y = 0
+}
+
+/** The figures as shown: they run from zero to FIGURES when the block is first seen. */
+const shown = ref<number[]>(FIGURES.map((figure) => (reduceMotion ? figure.value : 0)))
+const COUNT_MS = 900
+let countFrame = 0
+
+function countUp(): void {
+  const start: number = performance.now()
+  const tick = (now: number): void => {
+    const part: number = Math.min((now - start) / COUNT_MS, 1)
+    const eased: number = 1 - Math.pow(1 - part, 3)
+    shown.value = FIGURES.map((figure) => Math.round(figure.value * eased))
+    if (part < 1) {
+      countFrame = requestAnimationFrame(tick)
+    }
+  }
+  countFrame = requestAnimationFrame(tick)
+}
+
+/** Everything with the class "welcome__reveal" gets "is-in" once it has been scrolled to. */
+const page = ref<HTMLElement | null>(null)
+let watcher: IntersectionObserver | null = null
+
+onMounted(() => {
+  const root: HTMLElement | null = page.value
+  if (root === null) {
+    return
+  }
+  const blocks: HTMLElement[] = Array.from(root.querySelectorAll<HTMLElement>('.welcome__reveal'))
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    blocks.forEach((block) => block.classList.add('is-in'))
+    shown.value = FIGURES.map((figure) => figure.value)
+    return
+  }
+  watcher = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) {
+          continue
+        }
+        entry.target.classList.add('is-in')
+        if (entry.target.classList.contains('welcome__why')) {
+          countUp()
+        }
+        watcher?.unobserve(entry.target)
+      }
+    },
+    { threshold: 0.25 },
+  )
+  blocks.forEach((block) => watcher?.observe(block))
+})
+
+onBeforeUnmount(() => {
+  watcher?.disconnect()
+  cancelAnimationFrame(countFrame)
+})
+
+/** The third step can be tried: the same dinner on two days, and what the match says of each. */
+type Day = 'fri' | 'sat'
+
+const MATCHES: Record<Day, { label: string; when: string; all: boolean; fits: string; why: string; says: string; reply: string }> = {
+  fri: {
+    label: 'Friday',
+    when: 'Fri, 20 Nov, 19:00',
+    all: false,
+    fits: 'Works for 4 of 5',
+    why: 'Dana is free only on Saturday.',
+    says: 'Friday is hard for me. Saturday?',
+    reply: 'Let me look.',
+  },
+  sat: {
+    label: 'Saturday',
+    when: 'Sat, 21 Nov, 19:00',
+    all: true,
+    fits: 'Works for 5 of 5',
+    why: 'Everyone is free, and it fits every budget.',
+    says: 'Saturday works. I am in!',
+    reply: 'See you there.',
+  },
+}
+const DAYS: Day[] = ['fri', 'sat']
+const day = ref<Day>('fri')
 
 /** The arrow at the bottom of the first screen: down to the steps. */
 function showSteps(): void {
@@ -63,7 +171,7 @@ const YEAR: number = new Date().getFullYear()
 
 <template>
   <div class="app-bare">
-    <div class="welcome">
+    <div ref="page" class="welcome">
       <header class="welcome__bar">
         <RouterLink class="welcome__logo" :to="{ name: 'welcome' }" aria-label="Hangelo">
           <HangeloLogo />
@@ -82,10 +190,10 @@ const YEAR: number = new Date().getFullYear()
 
       <main>
         <!-- ------------------------------------------------------------ hero -->
-        <section class="welcome__hero">
+        <section class="welcome__hero" @pointermove="onHeroMove" @pointerleave="onHeroLeave">
           <!-- Pieces of the product scattered around the sentence, on a screen wide enough to
                have room beside it; purely decorative. -->
-          <div class="welcome__scatter" aria-hidden="true">
+          <div class="welcome__scatter" aria-hidden="true" :style="{ '--lean-x': lean.x, '--lean-y': lean.y }">
             <div class="hg-card welcome__bit welcome__bit--plan">
               <div class="hg-plan hg-plan--compact">
                 <span class="hg-plan__kind">
@@ -168,8 +276,9 @@ const YEAR: number = new Date().getFullYear()
         <!-- No visible title: the button at the bottom of the first screen already says it. -->
         <section id="welcome-how" class="welcome__how" aria-label="How it works">
           <ol class="welcome__steps">
-            <li v-for="(step, index) in STEPS" :key="step.title" class="welcome__step">
-              <div class="welcome__shot" aria-hidden="true">
+            <li v-for="(step, index) in STEPS" :key="step.title" class="welcome__step welcome__reveal">
+              <!-- The pictures are decorative, but for the third: it has a switch to press. -->
+              <div class="welcome__shot" :aria-hidden="index === 2 ? undefined : 'true'">
                 <div v-if="index === 0" class="hg-card hg-card--lg welcome__piece">
                   <div class="hg-plan hg-plan--compact">
                     <span class="hg-plan__kind">
@@ -202,6 +311,20 @@ const YEAR: number = new Date().getFullYear()
                 </div>
 
                 <div v-else class="welcome__piece welcome__agree">
+                  <div class="hg-seg welcome__days" role="radiogroup" aria-label="Try another day">
+                    <button
+                      v-for="option in DAYS"
+                      :key="option"
+                      class="hg-seg__opt"
+                      type="button"
+                      role="radio"
+                      :aria-checked="day === option"
+                      @click="day = option"
+                    >
+                      {{ MATCHES[option].label }}
+                    </button>
+                  </div>
+
                   <div class="hg-card hg-card--lg">
                     <div class="hg-plan hg-plan--compact">
                       <span class="hg-plan__kind">
@@ -210,27 +333,29 @@ const YEAR: number = new Date().getFullYear()
                       </span>
                       <h3 class="hg-plan__title">Dinner at Navat</h3>
                       <ul class="hg-plan__facts">
-                        <li class="hg-plan__fact"><Clock class="hg-icon" :stroke-width="1.5" />Fri, 20 Nov, 19:00</li>
+                        <li class="hg-plan__fact"><Clock class="hg-icon" :stroke-width="1.5" />{{ MATCHES[day].when }}</li>
                         <li class="hg-plan__fact"><Wallet class="hg-icon" :stroke-width="1.5" />$20–40</li>
                       </ul>
                     </div>
-                    <div class="welcome__match">
-                      <span class="hg-badge hg-badge--success">Works for 4 of 5</span>
-                      <span class="welcome__match-why">Dana is free only on Saturday.</span>
+                    <div :key="day" class="welcome__match welcome__swap" aria-live="polite">
+                      <span class="hg-badge" :class="MATCHES[day].all ? 'hg-badge--success' : 'hg-badge--warning'">
+                        {{ MATCHES[day].fits }}
+                      </span>
+                      <span class="welcome__match-why">{{ MATCHES[day].why }}</span>
                     </div>
                   </div>
 
-                  <div class="hg-chat">
+                  <div :key="day" class="hg-chat welcome__swap" aria-hidden="true">
                     <div class="hg-run">
                       <span class="hg-avatar hg-avatar--32 welcome__tone welcome__tone--mint">DM</span>
                       <div class="hg-run__body">
                         <p class="hg-run__name">Dana</p>
-                        <p class="hg-bubble hg-bubble--first">Moved my thing. I am in!</p>
+                        <p class="hg-bubble hg-bubble--first">{{ MATCHES[day].says }}</p>
                       </div>
                     </div>
                     <div class="hg-run hg-run--own">
                       <div class="hg-run__body">
-                        <p class="hg-bubble hg-bubble--own hg-bubble--first">See you there.</p>
+                        <p class="hg-bubble hg-bubble--own hg-bubble--first">{{ MATCHES[day].reply }}</p>
                       </div>
                     </div>
                   </div>
@@ -247,12 +372,12 @@ const YEAR: number = new Date().getFullYear()
         </section>
 
         <!-- ------------------------------------------------------------ why -->
-        <section class="welcome__why" aria-labelledby="welcome-why">
+        <section class="welcome__why welcome__reveal" aria-labelledby="welcome-why">
           <h2 id="welcome-why" class="welcome__step-title">We talk all the time. We meet far less.</h2>
 
           <dl class="welcome__figures">
-            <div v-for="figure in FIGURES" :key="figure.value" class="welcome__figure">
-              <dt class="welcome__figure-value hg-num">{{ figure.value }}</dt>
+            <div v-for="(figure, index) in FIGURES" :key="figure.value" class="welcome__figure">
+              <dt class="welcome__figure-value hg-num" :aria-label="figure.value + '%'">{{ shown[index] }}%</dt>
               <dd class="welcome__figure-text">{{ figure.text }}</dd>
             </div>
           </dl>
@@ -264,7 +389,7 @@ const YEAR: number = new Date().getFullYear()
 
         <!-- ------------------------------------------------------------ what comes next -->
         <!-- Not in the product yet, and says so. -->
-        <section class="welcome__soon" aria-labelledby="welcome-soon">
+        <section class="welcome__soon welcome__reveal" aria-labelledby="welcome-soon">
           <span class="welcome__answer-icon welcome__tone welcome__tone--sky" aria-hidden="true">
             <Plane class="hg-icon" :stroke-width="1.5" />
           </span>
@@ -280,7 +405,7 @@ const YEAR: number = new Date().getFullYear()
         </section>
 
         <!-- ------------------------------------------------------------ closing -->
-        <section class="welcome__closing">
+        <section class="welcome__closing welcome__reveal">
           <h2 class="welcome__title">Less planning. More hanging out.</h2>
           <p class="welcome__lead">Not another group chat. Not another calendar. Just the plan.</p>
           <RouterLink class="hg-btn hg-btn--neutral hg-btn--lg" :to="{ name: 'register' }">
@@ -413,16 +538,33 @@ const YEAR: number = new Date().getFullYear()
   display: none;
 }
 
+/* A piece leans after the pointer by its own depth (--depth, in px; the sign is its direction),
+   and straightens and grows a little under the pointer itself. "translate" and "rotate" are
+   separate properties here so that the two movements do not undo each other. */
 .welcome__bit {
+  --depth: 10;
+
   position: absolute;
   width: 240px;
   text-align: left;
+  translate: calc(var(--lean-x, 0) * var(--depth) * 1px) calc(var(--lean-y, 0) * var(--depth) * 1px);
+  transition:
+    translate var(--dur-3) var(--ease),
+    rotate var(--dur-2) var(--ease),
+    scale var(--dur-2) var(--ease);
+}
+
+.welcome__bit:hover {
+  rotate: 0deg;
+  scale: 1.04;
 }
 
 .welcome__bit--plan {
   top: 9%;
   left: 0;
-  transform: rotate(-4deg);
+  --depth: 14;
+
+  rotate: -4deg;
 }
 
 .welcome__bit--answer {
@@ -432,13 +574,17 @@ const YEAR: number = new Date().getFullYear()
   align-items: center;
   gap: var(--s-3);
   width: 270px;
-  transform: rotate(3deg);
+  --depth: -10;
+
+  rotate: 3deg;
 }
 
 .welcome__bit--chat {
   bottom: 19%;
   left: var(--s-5);
-  transform: rotate(2deg);
+  --depth: -16;
+
+  rotate: 2deg;
 }
 
 .welcome__bit--people {
@@ -448,7 +594,9 @@ const YEAR: number = new Date().getFullYear()
   flex-direction: column;
   gap: var(--s-3);
   width: 220px;
-  transform: rotate(-3deg);
+  --depth: 12;
+
+  rotate: -3deg;
 }
 
 .welcome__bit-text {
@@ -622,6 +770,55 @@ const YEAR: number = new Date().getFullYear()
   color: var(--c-ink-soft);
   font: var(--t-title-3);
   font-weight: 400;
+}
+
+/* The track of the switch is the colour of the box it lies in; one step stronger shows it. */
+.welcome__days {
+  align-self: center;
+  background: var(--c-surface-strong);
+}
+
+/* What the day switch changes comes in anew: a short fade and 8 px, as a new item of a list. */
+.welcome__swap {
+  animation: welcome-swap var(--dur-2) var(--ease);
+}
+
+@keyframes welcome-swap {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------------------------------------------------------------- appearing on scroll */
+
+.welcome__reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 600ms var(--ease),
+    transform 600ms var(--ease);
+}
+
+.welcome__reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome__reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .welcome__swap {
+    animation: none;
+  }
+
+  .welcome__bit {
+    transition: none;
+  }
 }
 
 /* ---------------------------------------------------------------- why */

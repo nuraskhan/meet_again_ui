@@ -35,6 +35,18 @@ Black and white carry the page; the accent appears only on "Create account". The
 the colour: on this page only, the avatars are coloured (yellow, coral, mint, sky), so are the
 activity icons (hike, dinner, coffee) and the rating star.
 
+## Movement
+
+Small, and none of it for a person who asked the system for less motion (the day switch still works):
+
+- The four pieces of the hero lean a few pixels after the pointer, each by its own depth, and
+  straighten under the pointer itself.
+- Each step, the figures, "what comes next" and the closing fade in and rise 24 px when first
+  scrolled to.
+- The two figures count up from zero when first seen.
+- The third step has a switch "Friday / Saturday": the match, its reason and the chat change with
+  the day ("Works for 4 of 5" on Friday, "Works for 5 of 5" on Saturday).
+
 ## Elements
 
 | `data-tst-id` | Element |
