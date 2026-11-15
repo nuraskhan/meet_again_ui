@@ -14,10 +14,14 @@ import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { EVENT_TYPE_LOOK, proposedTimesSummary } from '@/lib/format'
 import { nextStep, planSteps, wasLinkSent } from '@/lib/planSteps'
+import { useUserStory } from '@/lib/userStory'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
 const router = useRouter()
+
+// Under /user-story the page carries the guide through a plan; on its general address it does not.
+const { inStory, storyTo } = useUserStory()
 
 /** How many cards the skeleton shows while the lists are on their way. */
 const SKELETONS: number = 4
@@ -72,7 +76,7 @@ async function answer(invitation: Invitation, accept: boolean): Promise<void> {
       await api.acceptInvitation(invitation.invitationId)
       toastOk('You are coming. Now say where you are coming from.')
       // The plan page asks for the guest's location and travel distance.
-      await router.push({ name: 'plan', params: { eventId: invitation.event.id } })
+      await router.push(storyTo('plan', { eventId: invitation.event.id }))
       return
     } else {
       await api.declineInvitation(invitation.invitationId)
@@ -128,7 +132,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
   <div class="app-col">
     <div class="app-head">
       <h1 class="app-head__title">Plans</h1>
-      <RouterLink class="hg-btn hg-btn--neutral plans__new" :to="{ name: 'plan-new' }" data-tst-id="plans-new">
+      <RouterLink class="hg-btn hg-btn--neutral plans__new" :to="storyTo('plan-new')" data-tst-id="plans-new">
         <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
         <span>New plan</span>
       </RouterLink>
@@ -173,7 +177,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               </p>
               <RouterLink
                 class="plans__invitation-link"
-                :to="{ name: 'plan', params: { eventId: invitation.event.id } }"
+                :to="storyTo('plan', { eventId: invitation.event.id })"
               >
                 <!-- The default picture of the activity: venues have no photos of their own yet. -->
                 <span class="plans__thumb">
@@ -222,7 +226,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
             v-for="event in upcoming"
             :key="event.id"
             class="hg-card hg-card--link plans__card"
-            :to="{ name: 'plan', params: { eventId: event.id } }"
+            :to="storyTo('plan', { eventId: event.id })"
             data-tst-id="plan-card"
           >
             <div class="plans__card-top">
@@ -276,8 +280,8 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               <span class="plans__count hg-num">{{ crowd(event) }}</span>
             </div>
 
-            <!-- The one thing waiting for this person in the plan. -->
-            <span v-if="next(event) !== null" class="plans__next" data-tst-id="plan-card-next">
+            <!-- The user story (/user-story) only: the one thing waiting for this person in the plan. -->
+            <span v-if="inStory && next(event) !== null" class="plans__next" data-tst-id="plan-card-next">
               <ArrowRight class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
               <span>Next: {{ next(event) }}</span>
             </span>
@@ -295,7 +299,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               : 'Invite your friends to the first one. It takes a minute.'
           }}
         </p>
-        <RouterLink class="hg-btn hg-btn--primary plans__start" :to="{ name: 'plan-new' }">
+        <RouterLink class="hg-btn hg-btn--primary plans__start" :to="storyTo('plan-new')">
           <span>New plan</span>
         </RouterLink>
       </div>
@@ -324,7 +328,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
             v-for="event in closed"
             :key="event.id"
             class="hg-card hg-card--link hg-card--quiet plans__card plans__card--quiet"
-            :to="{ name: 'plan', params: { eventId: event.id } }"
+            :to="storyTo('plan', { eventId: event.id })"
             data-tst-id="plan-card-closed"
           >
             <div class="plans__card-top">

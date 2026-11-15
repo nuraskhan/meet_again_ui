@@ -8,6 +8,7 @@ import { LocateFixed, MapPin } from 'lucide-vue-next'
 import { api } from '@/api'
 import type { EventDto, Preference } from '@/api/types'
 import LocationMap from '@/components/LocationMap.vue'
+import { useUserStory } from '@/lib/userStory'
 import { errorText, toastOk } from '@/stores/toast'
 
 const props = defineProps<{
@@ -20,6 +21,9 @@ const emit = defineEmits<{
   /** The event as the server returned it after saving. */
   saved: [event: EventDto]
 }>()
+
+// The warnings about a place that is not on the map belong to the user story (/user-story).
+const { inStory } = useUserStory()
 
 const RADIUS_CHOICES: number[] = [1, 5, 10, 25, 50]
 const DEFAULT_RADIUS = 10
@@ -159,7 +163,7 @@ async function save(): Promise<void> {
     <span class="hg-row__text preference__saved-text">
       <span class="hg-row__title" data-tst-id="preference-located">{{ savedLine }}</span>
       <!-- A name alone cannot be measured from: say so, or "Suggest places" fails without a reason in sight. -->
-      <span v-if="current.latitude === null" class="hg-row__sub" data-tst-id="preference-no-pin">
+      <span v-if="inStory && current.latitude === null" class="hg-row__sub" data-tst-id="preference-no-pin">
         Not on the map yet - add a pin to get places picked for you
       </span>
     </span>
@@ -216,7 +220,9 @@ async function save(): Promise<void> {
             {{
               hasCoordinates
                 ? 'Pin set. Drag it or click the map to move it.'
-                : 'Click the map to drop a pin, or use your location. Places are picked from the pin.'
+                : inStory
+                  ? 'Click the map to drop a pin, or use your location. Places are picked from the pin.'
+                  : 'Click the map to drop a pin, or use your location.'
             }}
           </span>
         </p>

@@ -57,6 +57,13 @@ export const router = createRouter({
       props: true,
     },
     {
+      // The user story (see lib/userStory.ts): the invitation page with the steps it leads to.
+      path: '/user-story/i/:shareToken',
+      name: 'user-story-invite',
+      component: () => import('./views/InviteView.vue'),
+      props: true,
+    },
+    {
       // Everything inside shares the top bar with the navigation.
       path: '/',
       component: () => import('./views/AppShell.vue'),
@@ -68,6 +75,22 @@ export const router = createRouter({
         {
           path: 'plans/:eventId(\\d+)',
           name: 'plan',
+          component: () => import('./views/PlanView.vue'),
+          props: (route) => ({ eventId: Number(route.params.eventId) }),
+        },
+        // The user story: the same pages under the prefix /user-story, where they carry the guide
+        // through a plan ("What's next"). Everything of the user story lives under this prefix and
+        // nothing of it shows on the general addresses above (see lib/userStory.ts).
+        { path: 'user-story', redirect: { name: 'user-story-plans' } },
+        { path: 'user-story/plans', name: 'user-story-plans', component: () => import('./views/PlansView.vue') },
+        {
+          path: 'user-story/plans/new',
+          name: 'user-story-plan-new',
+          component: () => import('./views/PlanNewView.vue'),
+        },
+        {
+          path: 'user-story/plans/:eventId(\\d+)',
+          name: 'user-story-plan',
           component: () => import('./views/PlanView.vue'),
           props: (route) => ({ eventId: Number(route.params.eventId) }),
         },

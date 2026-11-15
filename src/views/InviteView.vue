@@ -13,6 +13,7 @@ import EventSummary from '@/components/EventSummary.vue'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
+import { useUserStory } from '@/lib/userStory'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
@@ -20,6 +21,9 @@ const props = defineProps<{ shareToken: string }>()
 
 const route = useRoute()
 const router = useRouter()
+
+// Under /user-story the page carries the guide through a plan; on its general address it does not.
+const { inStory, storyTo } = useUserStory()
 
 const event = ref<PublicEvent | null>(null)
 const loading = ref<boolean>(true)
@@ -61,7 +65,7 @@ async function accept(): Promise<void> {
   try {
     const joined = await api.joinEvent(props.shareToken)
     toastOk('You are in. The chat is waiting.')
-    await router.replace({ name: 'plan', params: { eventId: joined.id } })
+    await router.replace(storyTo('plan', { eventId: joined.id }))
   } catch (caught) {
     toastError(caught)
   } finally {
@@ -137,8 +141,8 @@ async function accept(): Promise<void> {
 
           <p v-if="crowd !== ''" class="invite-page__crowd" data-tst-id="invite-crowd">{{ crowd }}</p>
 
-          <!-- What saying yes leads to, so nobody presses a button blind. -->
-          <ol v-if="active" class="invite-page__steps" aria-label="How it works" data-tst-id="invite-steps">
+          <!-- The user story (/user-story) only: what saying yes leads to, so nobody presses a button blind. -->
+          <ol v-if="inStory && active" class="invite-page__steps" aria-label="How it works" data-tst-id="invite-steps">
             <li><span class="invite-page__step-no hg-num" aria-hidden="true">1</span>Say you are in</li>
             <li>
               <span class="invite-page__step-no hg-num" aria-hidden="true">2</span>{{ event.creatorName }} chooses

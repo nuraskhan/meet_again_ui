@@ -12,11 +12,15 @@ import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { addDays, availabilityPhrase, covers } from '@/lib/dates'
 import { dateTime, distanceRange, EVENT_TYPE_LOOK, localInputToIso, priceRange } from '@/lib/format'
+import { useUserStory } from '@/lib/userStory'
 import { auth } from '@/stores/auth'
 import { errorText, toastError, toastOk } from '@/stores/toast'
 
 const route = useRoute()
 const router = useRouter()
+
+// Under /user-story the page carries the guide through a plan; on its general address it does not.
+const { inStory, storyTo } = useUserStory()
 
 const types = ref<EventTypeInfo[]>([])
 const friends = ref<Friend[]>([])
@@ -328,7 +332,7 @@ async function send(): Promise<void> {
             : 'Invitations sent',
     )
     await saveLocation(event.id)
-    await router.replace({ name: 'plan', params: { eventId: event.id } })
+    await router.replace(storyTo('plan', { eventId: event.id }))
   } catch (caught) {
     error.value = errorText(caught)
   } finally {
@@ -399,9 +403,13 @@ async function send(): Promise<void> {
           <!-- -------------------------------------------------------- when -->
           <section>
             <h2 class="new__title new__title--tight">When</h2>
-            <p class="new__hint new__hint--above">
+            <!-- The user story (/user-story) does not promise a choice of dates the application lacks. -->
+            <p v-if="inStory" class="new__hint new__hint--above">
               Offer one or several; with several you settle on one together in the chat. Leave empty to
               agree on the time there too.
+            </p>
+            <p v-else class="new__hint new__hint--above">
+              Offer several and let people choose. Leave empty to agree on the time in the chat.
             </p>
 
             <div class="app-stack app-stack--tight">
@@ -652,12 +660,12 @@ async function send(): Promise<void> {
             >
               <span>{{ sendLabel }}</span>
             </button>
-            <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'plans' }">Cancel</RouterLink>
+            <RouterLink class="hg-btn hg-btn--quiet" :to="storyTo('plans')">Cancel</RouterLink>
           </div>
         </template>
 
         <div v-else class="new__actions">
-          <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'plans' }">Cancel</RouterLink>
+          <RouterLink class="hg-btn hg-btn--quiet" :to="storyTo('plans')">Cancel</RouterLink>
         </div>
       </form>
 

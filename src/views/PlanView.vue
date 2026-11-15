@@ -34,12 +34,16 @@ import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { EVENT_TYPE_LOOK, inviteLink } from '@/lib/format'
 import { markLinkSent, planSteps, wasLinkSent, type PlanStep } from '@/lib/planSteps'
+import { USER_STORY_PREFIX, useUserStory } from '@/lib/userStory'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
 const props = defineProps<{ eventId: number }>()
 
 const router = useRouter()
+
+// Under /user-story the page carries the guide through a plan; on its general address it does not.
+const { inStory, storyTo } = useUserStory()
 
 const event = ref<EventDto | null>(null)
 const loading = ref<boolean>(true)
@@ -207,7 +211,13 @@ const placesId: string = useId()
 /** The address to send to people; empty for everyone but the creator. */
 const link = computed<string>(() => {
   const token: string | null | undefined = event.value?.shareToken
-  return token ? inviteLink(token) : ''
+  if (!token) {
+    return ''
+  }
+  // A link sent from the user story opens the invitation in the user story too.
+  return inStory.value
+    ? window.location.origin + USER_STORY_PREFIX + '/i/' + encodeURIComponent(token)
+    : inviteLink(token)
 })
 
 const copied = ref<boolean>(false)
@@ -317,7 +327,7 @@ async function deletePlan(): Promise<void> {
   try {
     await api.deleteEvent(props.eventId)
     toastOk('The plan and its chat are deleted')
-    await router.push({ name: 'plans' })
+    await router.push(storyTo('plans'))
   } catch (caught) {
     toastError(caught)
   } finally {
@@ -331,7 +341,7 @@ async function removeFromMyList(): Promise<void> {
   try {
     await api.leaveEvent(props.eventId)
     toastOk('Removed from your list')
-    await router.push({ name: 'plans' })
+    await router.push(storyTo('plans'))
   } catch (caught) {
     toastError(caught)
   } finally {
@@ -545,7 +555,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
       <CalendarX class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
       <h1 class="hg-empty__title">Plan not found</h1>
       <p class="hg-empty__text">This plan does not exist, or you are not part of it.</p>
-      <RouterLink class="hg-btn hg-btn--primary" :to="{ name: 'plans' }">My plans</RouterLink>
+      <RouterLink class="hg-btn hg-btn--primary" :to="storyTo('plans')">My plans</RouterLink>
     </div>
 
     <div v-else-if="event !== null" class="plan__layout" data-tst-id="plan">
@@ -558,7 +568,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
         </div>
 
         <header class="plan__header">
-          <RouterLink class="plan__back" :to="{ name: 'plans' }">
+          <RouterLink class="plan__back" :to="storyTo('plans')">
             <ChevronLeft class="hg-icon" :stroke-width="1.5" aria-hidden="true" />Plans
           </RouterLink>
 
@@ -589,8 +599,39 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           </RouterLink>
         </header>
 
-        <!-- What's next: the steps of the plan for this person, the one to do now with its button. -->
-        <PlanSteps :steps="steps">
+        <!-- The invitee has not answered: the two buttons are the whole point of the page. -->
+        <div
+          v-if="!inStory && active && mine?.status === 'PENDING'"
+          class="hg-card hg-card--accent plan__answer"
+        >
+          <p class="plan__answer-q">Are you coming?</p>
+          <div class="plan__answer-actions">
+            <button
+              class="hg-btn hg-btn--primary"
+              :class="{ 'is-loading': answering === 'accept' }"
+              type="button"
+              :disabled="busy"
+              data-tst-id="plan-accept"
+              @click="answer(true)"
+            >
+              <span>I'm coming</span>
+            </button>
+            <button
+              class="hg-btn hg-btn--outline"
+              :class="{ 'is-loading': answering === 'decline' }"
+              type="button"
+              :disabled="busy"
+              data-tst-id="plan-decline"
+              @click="answer(false)"
+            >
+              <span>I can't</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- The user story (/user-story) only. What's next: the steps of the plan for this person, the
+             one to do now with its button; it takes the place of the answer card above. -->
+        <PlanSteps v-if="inStory" :steps="steps">
           <template #default="{ step }">
             <!-- A guest who has not answered: the two buttons are the whole point of the page. -->
             <template v-if="step.id === 'answer'">
@@ -699,7 +740,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
         >
           <h2 class="plan__title">Your location and distance</h2>
           <p v-if="event.myPreference === null" class="plan__todo" data-tst-id="plan-preference-todo">
-            Put yourself on the map and say how far you can go.
+            Tell the others where you are coming from and how far you can go.
           </p>
           <PreferenceForm ref="preferenceForm" :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
         </section>
@@ -1276,6 +1317,24 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
   overflow-wrap: anywhere;
 }
 
+/* ---- the answer bar ---- */
+.plan__answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+}
+
+.plan__answer-q {
+  flex: 1 1 auto;
+  font: var(--t-title-3);
+}
+
+.plan__answer-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
 /* ---- the guide ---- */
 .plan__allset {
   flex: 1 1 0;
@@ -1630,6 +1689,14 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
 
 /* ---- phone: buttons take the whole width ---- */
 @media (max-width: 767px) {
+  .plan__answer-actions {
+    flex: 1 1 100%;
+  }
+
+  .plan__answer-actions .hg-btn {
+    flex: 1 1 0;
+  }
+
   .plan__end {
     align-items: stretch;
   }
