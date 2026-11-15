@@ -1045,6 +1045,11 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           v-if="pickerOpen"
           :category="event.eventType"
           :busy="placeBusy"
+          :origin="
+            event.myPreference !== null && event.myPreference.latitude !== null && event.myPreference.longitude !== null
+              ? { latitude: event.myPreference.latitude, longitude: event.myPreference.longitude }
+              : null
+          "
           @choose="choosePlace($event.id)"
           @close="pickerOpen = false"
         />

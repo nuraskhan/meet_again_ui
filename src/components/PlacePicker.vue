@@ -5,7 +5,7 @@
 // inside it.
 
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { MapPinOff, Search, Star, X } from 'lucide-vue-next'
+import { LocateFixed, MapPin, MapPinOff, Search, Star, X } from 'lucide-vue-next'
 import { api } from '@/api'
 import type { EventTypeCode, Place } from '@/api/types'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
@@ -17,7 +17,45 @@ const props = defineProps<{
   category: EventTypeCode
   /** The caller is attaching the chosen venue: nothing else can be chosen meanwhile. */
   busy?: boolean
+  /**
+   * Where the person is, if the plan already knows (the location they saved for it): the list is
+   * then measured from there - every row says how far the place is, and the nearest come first.
+   */
+  origin?: { latitude: number; longitude: number } | null
 }>()
+
+/** The point distances are measured from: the plan's, or the device's once the person asks. */
+const from = ref<{ latitude: number; longitude: number } | null>(props.origin ?? null)
+const locating = ref<boolean>(false)
+/** The device gave no position (no permission, no sensor): said once, under the button. */
+const locateFailed = ref<boolean>(false)
+
+/** Asks the device where the person is - only when they press the button, never by itself. */
+function locate(): void {
+  if (!('geolocation' in navigator)) {
+    locateFailed.value = true
+    return
+  }
+  locating.value = true
+  locateFailed.value = false
+  navigator.geolocation.getCurrentPosition(
+    (found) => {
+      locating.value = false
+      from.value = { latitude: found.coords.latitude, longitude: found.coords.longitude }
+      void search()
+    },
+    () => {
+      locating.value = false
+      locateFailed.value = true
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+  )
+}
+
+/** "0.4 mi", "12 mi": a tenth matters only close by. */
+function distance(miles: number): string {
+  return (miles < 10 ? miles.toFixed(1) : String(Math.round(miles))) + ' mi'
+}
 
 const emit = defineEmits<{
   choose: [place: Place]
@@ -65,6 +103,7 @@ async function search(): Promise<void> {
       city: city.value,
       q: query.value.trim(),
       limit: LIMIT,
+      from: from.value,
     })
     if (mine !== latest) {
       return
@@ -266,7 +305,27 @@ function whereLine(place: Place): string {
           </p>
         </div>
 
-        <ul v-else class="hg-list">
+        <template v-else>
+        <!-- Without a point to measure from the list is by rating; one press adds the distances. -->
+        <div v-if="from === null" class="picker__locate">
+          <button
+            class="hg-btn hg-btn--outline hg-btn--sm"
+            :class="{ 'is-loading': locating }"
+            type="button"
+            :disabled="locating"
+            data-tst-id="place-picker-locate"
+            @click="locate"
+          >
+            <LocateFixed class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+            <span>Show how far each is</span>
+          </button>
+          <span v-if="locateFailed" class="picker__locate-note">
+            Your browser did not give your location. The list stays by rating.
+          </span>
+        </div>
+        <p v-else class="picker__locate-note" data-tst-id="place-picker-nearest">Nearest first.</p>
+
+        <ul class="hg-list">
           <li v-for="place in places" :key="place.id">
             <button
               class="picker__row"
@@ -284,6 +343,14 @@ function whereLine(place: Place): string {
               </span>
               <span class="picker__row-trail">
                 <span
+                  v-if="place.distanceMi !== null"
+                  class="picker__row-distance hg-num"
+                  :aria-label="distance(place.distanceMi) + ' away'"
+                  data-tst-id="place-picker-distance"
+                >
+                  <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />{{ distance(place.distanceMi) }}
+                </span>
+                <span
                   v-if="place.rating !== null"
                   class="hg-place__rating"
                   :aria-label="'Rated ' + place.rating.toFixed(1) + ' out of 5'"
@@ -295,6 +362,7 @@ function whereLine(place: Place): string {
             </button>
           </li>
         </ul>
+        </template>
       </div>
     </div>
   </div>
@@ -478,5 +546,34 @@ function whereLine(place: Place): string {
     padding: var(--s-4) var(--s-4) calc(var(--s-4) + env(safe-area-inset-bottom));
     border-radius: var(--r-l) var(--r-l) 0 0;
   }
+}
+
+/* How far the place is: beside the rating, in the same quiet line. */
+.picker__row-distance {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+  white-space: nowrap;
+}
+
+.picker__row-distance .hg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.picker__locate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+}
+
+.picker__locate-note {
+  padding: 0 var(--s-2) var(--s-2);
+  color: var(--c-ink-soft);
+  font: var(--t-small);
 }
 </style>

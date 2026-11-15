@@ -154,7 +154,9 @@ function safeWebsite(website: string | null): string | null {
         </span>
 
         <ul class="places__facts hg-num">
-          <li>
+          <!-- With one person counted, the distance for everyone is the line above ("from you")
+               said twice: shown only when it adds something. -->
+          <li v-if="!(suggestion.participantsConsidered === 1 && suggestion.myDistanceMi !== null)">
             {{
               suggestion.participantsConsidered === 1
                 ? suggestion.averageDistanceMi + ' mi away'

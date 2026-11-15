@@ -83,14 +83,26 @@ export const api = {
 
   // ---------------------------------------------------------------- venues
   /** Venues to choose from, the best rated first; every filter is optional. */
-  places: (filter: { category?: EventTypeCode; city?: string; q?: string; limit?: number }) => {
-    const query = new URLSearchParams()
-    if (filter.category !== undefined) query.set('category', filter.category)
-    if (filter.city !== undefined && filter.city !== '') query.set('city', filter.city)
-    if (filter.q !== undefined && filter.q !== '') query.set('q', filter.q)
-    if (filter.limit !== undefined) query.set('limit', String(filter.limit))
-    return get<Place[]>('/place/list?' + query.toString())
-  },
+  /**
+   * With `from` (where the person is) each venue says how far it is and the nearest come first.
+   * WHY a POST: the position goes in the body. In the address it would stay in the browser's
+   * history and in the logs of every proxy on the way.
+   */
+  places: (filter: {
+    category?: EventTypeCode
+    city?: string
+    q?: string
+    limit?: number
+    from?: { latitude: number; longitude: number } | null
+  }) =>
+    post<Place[]>('/place/search', {
+      category: filter.category ?? null,
+      city: filter.city === undefined || filter.city === '' ? null : filter.city,
+      q: filter.q === undefined || filter.q === '' ? null : filter.q,
+      latitude: filter.from?.latitude ?? null,
+      longitude: filter.from?.longitude ?? null,
+      limit: filter.limit ?? null,
+    }),
   /** The cities there are venues in, the one with the most venues first. */
   placeCities: () => get<string[]>('/place/city/list'),
 

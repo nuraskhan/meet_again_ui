@@ -12,13 +12,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-vue-next'
 import { api } from '@/api'
-import type {
-  Availability,
-  AvailabilityKind,
-  EventDto,
-  FriendAvailability,
-  SaveAvailabilityRequest,
-} from '@/api/types'
+import type { Availability, AvailabilityKind, EventDto, EventTypeCode, FriendAvailability, SaveAvailabilityRequest } from '@/api/types'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import {
@@ -52,6 +46,26 @@ const KIND_LABEL: Record<AvailabilityKind, string> = { BUSY: 'Busy', FREE: 'Free
 
 /** A day cell has room for this many bands; a third mark on one day is seen in the details. */
 const MAX_BANDS: number = 2
+
+/**
+ * A plan is a line under the date, one line per plan, in the colour of its activity. Up to this
+ * many lines fit; a day with more plans shows their number instead, on a tint of the same colour.
+ * (It used to be a dot with a number beside the date: "2" next to "21" read as part of the date.)
+ */
+const MAX_PLAN_LINES: number = 3
+
+/** The colour a plan's line has, by its activity: the same hues as the pictures of the activities. */
+const PLAN_COLOUR: Record<EventTypeCode, string> = {
+  BATH: '#b5651d',
+  FOOD: '#c0392b',
+  COFFEE: '#6f4e37',
+  BAR: '#7d3c98',
+  WALK: '#2e7d4f',
+  CINEMA: '#34495e',
+  SPORT: '#1f6f8b',
+  BOARD_GAMES: '#b8860b',
+  OTHER: '#8a5a2b',
+}
 
 /** The server's limits are not known here; these only keep a pasted novel out. */
 const MAX_CITY_LENGTH: number = 100
@@ -201,6 +215,10 @@ interface DayCell {
   inMonth: boolean
   today: boolean
   plans: number
+  /** The colour of each plan of the day, in order; empty when there are too many for lines. */
+  planLines: string[]
+  /** The colour behind the number, when the plans are shown as a number. */
+  planTint: string
   bands: Band[]
   /** How many friends marked something for the day. */
   friends: number
@@ -211,7 +229,8 @@ interface DayCell {
 const cells = computed<DayCell[]>(() =>
   days.value.map((date: string): DayCell => {
     const marks: Availability[] = mine.value.filter((mark) => covers(mark, date))
-    const planCount: number = plansByDay.value.get(date)?.length ?? 0
+    const dayPlans: PlanOnDay[] = plansByDay.value.get(date) ?? []
+    const planCount: number = dayPlans.length
     const friendCount: number = new Set<number>(
       friends.value.filter((mark) => covers(mark, date)).map((mark) => mark.userId),
     ).size
@@ -230,6 +249,8 @@ const cells = computed<DayCell[]>(() =>
       inMonth: date.startsWith(monthPrefix.value),
       today: date === now,
       plans: planCount,
+      planLines: planCount > MAX_PLAN_LINES ? [] : dayPlans.map((plan) => PLAN_COLOUR[plan.event.eventType]),
+      planTint: dayPlans.length > 0 ? PLAN_COLOUR[dayPlans[0]!.event.eventType] : '',
       bands: marks.slice(0, MAX_BANDS).map((mark) => ({
         id: mark.id,
         kind: mark.kind,
@@ -443,11 +464,24 @@ async function save(): Promise<void> {
             <span class="calendar__day-top">
               <span class="calendar__number hg-num">{{ cell.number }}</span>
               <span class="calendar__signs">
-                <span v-if="cell.plans > 0" class="calendar__plan-sign hg-num">
-                  <span class="calendar__dot calendar__dot--plan"></span>
-                  <template v-if="cell.plans > 1">{{ cell.plans }}</template>
-                </span>
                 <span v-if="cell.friends > 0" class="calendar__dot calendar__dot--friends"></span>
+              </span>
+            </span>
+            <!-- The plans of the day, under the date: a soft coloured line each; with more than
+                 three, their number on the same soft colour. -->
+            <span v-if="cell.plans > 0" class="calendar__plans" data-tst-id="calendar-day-plans">
+              <span
+                v-for="(colour, index) in cell.planLines"
+                :key="index"
+                class="calendar__plan-line"
+                :style="{ '--plan': colour }"
+              ></span>
+              <span
+                v-if="cell.planLines.length === 0"
+                class="calendar__plan-count hg-num"
+                :style="{ '--plan': cell.planTint }"
+              >
+                {{ cell.plans }}
               </span>
             </span>
             <!-- The user's own marks: a band per mark, unbroken from its first day to its last. -->
@@ -480,7 +514,7 @@ async function save(): Promise<void> {
             Trip
           </li>
           <li class="calendar__legend-item">
-            <span class="calendar__dot calendar__dot--plan"></span>
+            <span class="calendar__plan-line calendar__swatch" :style="{ '--plan': PLAN_COLOUR.FOOD }"></span>
             Plan
           </li>
           <li class="calendar__legend-item">
@@ -843,10 +877,39 @@ async function save(): Promise<void> {
   border-radius: var(--r-full);
 }
 
-/* A plan: a filled dot. Friends: an empty ring. */
-.calendar__dot--plan {
-  background: var(--c-ink);
+/* A plan: a soft line in the colour of its activity (--plan), under the date. The colour is
+   softened by opacity, so a day with a plan is marked without shouting. */
+.calendar__plans {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 var(--s-1);
 }
+
+.calendar__plan-line {
+  display: block;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--plan);
+  opacity: 0.6;
+}
+
+/* More plans than lines fit: their number, on a tint of the colour. */
+.calendar__plan-count {
+  align-self: center;
+  min-width: 20px;
+  padding: 0 var(--s-1);
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--plan) 22%, transparent);
+  color: var(--c-ink);
+  font: var(--t-caption);
+  line-height: 16px;
+  text-align: center;
+  opacity: 0.85;
+}
+
+/* Friends: an empty ring. */
 
 .calendar__dot--friends {
   border: 2px solid var(--c-ink-soft);

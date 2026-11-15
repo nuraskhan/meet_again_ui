@@ -368,6 +368,8 @@ export interface Place {
   phone: string | null
   /** An invented demonstration place, not a real business. */
   sample: boolean
+  /** How far it is from the point the search was made from, miles; null when no point was given. */
+  distanceMi: number | null
 }
 
 /** What a person marked in their calendar for some days. */
