@@ -1,42 +1,49 @@
-# hangelo_ui
+# Hangelo: the web application
 
-This template should help get you started developing with Vue 3 in Vite.
+**Less planning. More hanging out.**
 
-## Recommended IDE Setup
+Hangelo turns your friends' different schedules, budgets, interests and locations into one confirmed
+plan. This repository is what people see in the browser; the server lives in
+[meet_again](https://github.com/nuraskhan/meet_again), and its README tells what the product does.
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Try it: https://meet-again-ui-112b5408b3d1.herokuapp.com/
 
-## Recommended Browser Setup
+```mermaid
+flowchart LR
+    Browser --> UI[Web app :19000] --> Server[Server :29000]
+```
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+## Run it
 
-## Type Support for `.vue` Imports in TS
+You need Node 22.18 or newer, and the server running on http://localhost:29000 (`make start` in
+`meet_again`).
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 npm install
 ```
 
-### Compile and Hot-Reload for Development
-
-```sh
+```bash
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+Open http://localhost:19000 and log in as `alice@demo.test` with the password `demo123`.
 
-```sh
-npm run build
-```
+| Command | What it does |
+|---------|--------------|
+| `npm run dev` | The application with hot reload |
+| `npm run build` | Type check and production build into `dist/` |
+| `npm start` | Serves `dist/` the way Heroku does; needs `npm run build` first |
+
+## Deployment
+
+Heroku runs `npm start` (see `Procfile`), which is `server.js`: it serves the built application and
+forwards `/api/*` to the server.
+
+| Variable | Meaning | Default |
+|----------|---------|---------|
+| `PORT` | Where to listen; Heroku sets it | `19000` |
+| `API_URL` | Address of the server | `http://localhost:29000` |
+
+## More
+
+- Design documents, page by page: [design](design).
