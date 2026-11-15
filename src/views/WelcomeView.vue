@@ -5,7 +5,7 @@
 
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
-import { ArrowDown, ArrowUpRight, Check, Clock, Coffee, Heart, MapPin, Mountain, Plane, Star, Utensils, Wallet } from 'lucide-vue-next'
+import { ArrowDown, ArrowUpRight, Check, Clock, Coffee, Heart, MapPin, Mountain, Plane, Play, Star, Utensils, Wallet } from 'lucide-vue-next'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { FREE_FEATURES, PLUS_FEATURES, PLUS_PRICE_MONTH, PLUS_PRICE_YEAR } from '@/lib/plus'
@@ -155,6 +155,15 @@ function showSteps(): void {
   document.getElementById('welcome-how')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
 }
 
+/** "Pricing" in the bar: down to the plans. */
+function showPricing(): void {
+  const reduce: boolean = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const section: HTMLElement | null = document.getElementById('welcome-plans')
+  // Shown at once: it is revealed on scroll otherwise, and a jump must not land on an empty spot.
+  section?.classList.add('is-in')
+  section?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+}
+
 const YEAR: number = new Date().getFullYear()
 </script>
 
@@ -165,6 +174,22 @@ const YEAR: number = new Date().getFullYear()
         <RouterLink class="welcome__logo" :to="{ name: 'welcome' }" aria-label="Hangelo">
           <HangeloLogo />
         </RouterLink>
+
+        <!-- What a visitor most often looks for first: what it costs, and a way to try it without
+             signing up. "Try demo" opens the application as a ready demonstration account. -->
+        <nav class="welcome__nav" aria-label="On this page">
+          <button class="hg-btn hg-btn--quiet" type="button" data-tst-id="welcome-pricing-link" @click="showPricing">
+            Pricing
+          </button>
+          <RouterLink
+            class="hg-btn hg-btn--outline"
+            :to="{ name: 'demo-login', params: { who: 'steve-jobs' } }"
+            data-tst-id="welcome-demo"
+          >
+            <Play class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+            Try demo
+          </RouterLink>
+        </nav>
 
         <span class="app-grow"></span>
 
@@ -395,7 +420,7 @@ const YEAR: number = new Date().getFullYear()
 
         <!-- ------------------------------------------------------------ pricing -->
         <!-- The same figures and the same list as the "Upgrade to Plus" dialog: both read lib/plus.ts. -->
-        <section class="welcome__pricing welcome__reveal" aria-labelledby="welcome-pricing">
+        <section id="welcome-plans" class="welcome__pricing welcome__reveal" aria-labelledby="welcome-pricing">
           <h2 id="welcome-pricing" class="welcome__step-title">Free to plan. Plus when you plan a lot.</h2>
           <div class="welcome__plans">
             <article class="welcome__plan" data-tst-id="welcome-plan-free">
@@ -533,6 +558,29 @@ const YEAR: number = new Date().getFullYear()
 .welcome__logo {
   display: inline-flex;
   color: var(--c-ink);
+}
+
+/* "Pricing" and "Try demo": beside the logo on a wide screen. */
+.welcome__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-left: var(--s-4);
+}
+
+/* A narrow screen has no room for them in the bar's one line: they take a line of their own
+   under it, centred, so both stay at the top of the page. */
+@media (max-width: 720px) {
+  .welcome__bar {
+    flex-wrap: wrap;
+  }
+
+  .welcome__nav {
+    order: 5;
+    justify-content: center;
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 /* ---------------------------------------------------------------- hero */
