@@ -19,7 +19,9 @@ import {
 } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError, serverFileUrl } from '@/api/http'
-import type { Profile } from '@/api/types'
+import type { AvailabilityKind, FriendAvailability, Profile } from '@/api/types'
+import ReliabilityBadge from '@/components/ReliabilityBadge.vue'
+import { addDays, availabilityPhrase, dayRange, today } from '@/lib/dates'
 import { initials } from '@/lib/format'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
@@ -74,6 +76,7 @@ async function load(): Promise<void> {
   missing.value = false
   shown.value = 0
   relation.value = null
+  coming.value = []
   void loadRelation()
   try {
     person.value = await api.profile(props.userId)
@@ -190,6 +193,45 @@ async function changeRelation(action: () => Promise<void>): Promise<void> {
   } finally {
     await loadRelation()
     relationBusy.value = false
+  }
+}
+
+// ------------------------------------------------------------------ the days a friend marked
+
+/** How far ahead the marks are shown: about what one plans for. */
+const COMING_DAYS: number = 60
+
+const KIND_LABEL: Record<AvailabilityKind, string> = { BUSY: 'Busy', FREE: 'Free', TRIP: 'Away' }
+
+/** The friend's marks for the coming days, earliest first. Empty for anyone who is not a friend. */
+const coming = ref<FriendAvailability[]>([])
+
+// Friends see each other's marked days; the server gives nothing about anyone else, so it is
+// asked only once the person is known to be a friend.
+watch(
+  () => relation.value?.kind,
+  (kind) => {
+    if (kind === 'FRIEND') {
+      void loadComing()
+    } else {
+      coming.value = []
+    }
+  },
+)
+
+async function loadComing(): Promise<void> {
+  const userId: number = props.userId
+  // Days are plain dates in the user's own calendar: see lib/dates.ts.
+  const from: string = today()
+  try {
+    const marks: FriendAvailability[] = await api.friendsAvailability(from, addDays(from, COMING_DAYS), userId)
+    // Another person was opened meanwhile, or the friendship ended: the answer is not for this page.
+    if (userId !== props.userId || relation.value?.kind !== 'FRIEND') {
+      return
+    }
+    coming.value = [...marks].sort((a, b) => a.fromDate.localeCompare(b.fromDate))
+  } catch (caught) {
+    toastError(caught)
   }
 }
 </script>
@@ -333,6 +375,37 @@ async function changeRelation(action: () => Promise<void>): Promise<void> {
             {{ person.privilege === 'MAX' ? 'Max' : 'Pro' }}
           </span>
         </div>
+
+        <!-- How much their "I'm coming" is worth. Nothing while there is too little to judge by. -->
+        <div
+          v-if="person.reliability.score !== null"
+          class="person__reliability"
+          data-tst-id="person-reliability"
+        >
+          <ReliabilityBadge :score="person.reliability.score" />
+          <span class="person__reliability-text hg-num">
+            Kept {{ person.reliability.kept }} of {{ person.reliability.kept + person.reliability.broken }} promises
+          </span>
+        </div>
+
+        <!-- For a friend: the days they marked, to see at once when not to invite them. -->
+        <section v-if="coming.length > 0" data-tst-id="person-availability">
+          <h2 class="person__title">Coming days</h2>
+          <ul class="person__coming">
+            <li v-for="(mark, index) in coming" :key="index" class="person__mark" data-tst-id="person-mark">
+              <span
+                class="hg-badge"
+                :class="{ 'hg-badge--success': mark.kind === 'FREE', 'hg-badge--warning': mark.kind !== 'FREE' }"
+              >
+                {{ KIND_LABEL[mark.kind] }}
+              </span>
+              <span class="hg-num">{{ dayRange(mark.fromDate, mark.toDate) }}</span>
+              <span v-if="mark.kind === 'TRIP' && mark.city" class="hg-soft">
+                {{ availabilityPhrase(mark.kind, mark.city) }}
+              </span>
+            </li>
+          </ul>
+        </section>
 
         <section v-if="person.bio">
           <h2 class="person__title">About</h2>
@@ -485,6 +558,36 @@ async function changeRelation(action: () => Promise<void>): Promise<void> {
 }
 
 .person__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.person__reliability {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* Under the actions it belongs to them: closer than one section is to the next. */
+.person__actions + .person__reliability {
+  margin-top: calc(var(--s-5) * -1);
+}
+
+.person__reliability-text {
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+}
+
+.person__coming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.person__mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

@@ -1,21 +1,36 @@
 <script setup lang="ts">
 // One plan: the invitation, who answered what, the way into its chat.
-// Two columns: what the plan is, where to go and the viewer's own location on the left; the chat,
-// the link and the people in a rail on the right (under the rest on a narrow screen).
+// Two columns: what the plan is, its venue, where to go and the viewer's own location on the left;
+// the chat, the link and the people in a rail on the right (under the rest on a narrow screen).
+// After the plan is over its organiser marks here who said "coming" and did not come.
 
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { CalendarX, Check, ChevronLeft, Globe, Link, MessageCircle, Share2, Trash2, X } from 'lucide-vue-next'
+import {
+  CalendarX,
+  Check,
+  ChevronLeft,
+  Globe,
+  Link,
+  MapPin,
+  MessageCircle,
+  Share2,
+  Star,
+  Trash2,
+  X,
+} from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
-import type { AppNotification, EventDto, Invitee, Preference } from '@/api/types'
+import type { AppNotification, EventDto, Invitee, Place, Preference } from '@/api/types'
 import { onSignal } from '@/stores/signal'
+import EventPicture from '@/components/EventPicture.vue'
 import EventSummary from '@/components/EventSummary.vue'
+import PlacePicker from '@/components/PlacePicker.vue'
 import PreferenceForm from '@/components/PreferenceForm.vue'
 import SuggestedPlaces from '@/components/SuggestedPlaces.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import { inviteLink } from '@/lib/format'
+import { EVENT_TYPE_LOOK, inviteLink } from '@/lib/format'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
@@ -308,6 +323,98 @@ const requests = computed<Invitee[]>(() =>
   (event.value?.invitees ?? []).filter((invitee) => invitee.status === 'REQUESTED'),
 )
 
+// ---------------------------------------------------------------- the venue
+
+/** Only the organiser chooses the venue, and only while the plan is on. */
+const canChoosePlace = computed<boolean>(() => isCreator.value && active.value)
+
+/** The dialog for choosing a venue is open. */
+const pickerOpen = ref<boolean>(false)
+/** A venue is being attached or taken off. */
+const placeBusy = ref<boolean>(false)
+/** The organiser pressed "Remove" on the venue once and is asked to confirm. */
+const confirmingPlaceRemove = ref<boolean>(false)
+
+/** From the dialog or from a suggestion: the place becomes the venue of the plan. */
+async function choosePlace(placeId: number): Promise<void> {
+  placeBusy.value = true
+  try {
+    event.value = await api.attachPlace(props.eventId, placeId)
+    toastOk('The place is chosen')
+    pickerOpen.value = false
+    confirmingPlaceRemove.value = false
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    placeBusy.value = false
+  }
+}
+
+async function removePlace(): Promise<void> {
+  placeBusy.value = true
+  try {
+    event.value = await api.detachPlace(props.eventId)
+    toastOk('The place is removed')
+    confirmingPlaceRemove.value = false
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    placeBusy.value = false
+  }
+}
+
+/** "12 Abay Ave, Almaty"; the city is not repeated when the address already ends with it. */
+function placeAddress(place: Place): string {
+  if (place.city === null || place.city === '' || place.address.includes(place.city)) {
+    return place.address
+  }
+  return place.address + ', ' + place.city
+}
+
+/** The venue on OpenStreetMap with a marker on it, in a new tab. */
+function placeMapLink(place: Place): string {
+  const lat: string = place.latitude.toFixed(5)
+  const lon: string = place.longitude.toFixed(5)
+  return 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '#map=17/' + lat + '/' + lon
+}
+
+/** Only an ordinary web address becomes a link; anything else stored as a "website" is ignored. */
+function safeWebsite(website: string | null): string | null {
+  return website !== null && /^https?:\/\//i.test(website) ? website : null
+}
+
+// ---------------------------------------------------------------- who came
+
+/**
+ * After the plan is over its organiser says who did not come. Nobody else is shown these marks:
+ * who let the others down is between that person and the organiser.
+ */
+const canMarkCame = computed<boolean>(() => isCreator.value && event.value?.status === 'EXPIRED')
+
+/** Only someone who said "coming" can have failed to come. */
+function markable(invitee: Invitee): boolean {
+  return canMarkCame.value && invitee.status === 'ACCEPTED'
+}
+
+const anyMarkable = computed<boolean>(() => guests.value.some(markable))
+
+/** The guest whose mark is being saved right now (their user id), to disable the button. */
+const marking = ref<number | null>(null)
+
+async function markCame(invitee: Invitee, came: boolean): Promise<void> {
+  marking.value = invitee.userId
+  try {
+    event.value = came
+      ? await api.markCame(props.eventId, invitee.userId)
+      : await api.markNoShow(props.eventId, invitee.userId)
+    toastOk(came ? 'The mark is taken back' : invitee.displayName + ' is marked as not having come')
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    marking.value = null
+  }
+}
+
 /** Everyone else in the list: invited, coming, declined, removed. */
 const guests = computed<Invitee[]>(() =>
   (event.value?.invitees ?? []).filter((invitee) => invitee.status !== 'REQUESTED'),
@@ -371,6 +478,12 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
     <div v-else-if="event !== null" class="plan__layout" data-tst-id="plan">
       <!-- ============================================================ the main column -->
       <div class="plan__main">
+        <!-- The rule: a plan without a photo of its venue gets the default picture of its kind.
+             Venues have no photos yet, so for now it is always this picture. -->
+        <div class="plan__picture" data-tst-id="plan-picture">
+          <EventPicture :type="event.eventType" />
+        </div>
+
         <header class="plan__header">
           <RouterLink class="plan__back" :to="{ name: 'plans' }">
             <ChevronLeft class="hg-icon" :stroke-width="1.5" aria-hidden="true" />Plans
@@ -435,7 +548,130 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           <ProposedTimes :times="event.proposedTimes" />
         </section>
 
-        <SuggestedPlaces :event="event" :can-ask="canSetPreference" @updated="event = $event" />
+        <!-- The venue. A plan that is closed and never had one says nothing about it. -->
+        <section v-if="event.place !== null || active" data-tst-id="plan-place">
+          <h2 class="plan__title">Where</h2>
+
+          <div v-if="event.place !== null" class="hg-card plan__place">
+            <div class="plan__place-head">
+              <h3 class="hg-place__name plan__place-name" data-tst-id="plan-place-name">{{ event.place.name }}</h3>
+              <span v-if="event.place.sample" class="hg-badge" title="An invented place for demonstration">
+                Sample
+              </span>
+            </div>
+
+            <span class="hg-place__cat plan__place-cat">
+              {{ EVENT_TYPE_LOOK[event.place.category].label }}
+              <!-- Nobody has rated it: no stars at all, rather than "0.0". -->
+              <span
+                v-if="event.place.rating !== null"
+                class="hg-place__rating"
+                :aria-label="'Rated ' + event.place.rating.toFixed(1) + ' out of 5'"
+              >
+                <Star class="hg-icon" :stroke-width="1.5" aria-hidden="true" />{{ event.place.rating.toFixed(1) }}
+              </span>
+              <span v-if="event.place.rating !== null && event.place.reviewCount !== null" class="hg-num">
+                ({{ event.place.reviewCount }} {{ event.place.reviewCount === 1 ? 'review' : 'reviews' }})
+              </span>
+            </span>
+
+            <p class="plan__place-addr">
+              <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>{{ placeAddress(event.place) }}</span>
+            </p>
+
+            <div class="plan__place-links">
+              <a
+                class="hg-link"
+                :href="placeMapLink(event.place)"
+                target="_blank"
+                rel="noopener"
+                data-tst-id="plan-place-map"
+              >
+                Open on the map
+              </a>
+              <a
+                v-if="safeWebsite(event.place.website) !== null"
+                class="hg-link"
+                :href="safeWebsite(event.place.website) ?? undefined"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-tst-id="plan-place-website"
+              >
+                Website
+              </a>
+            </div>
+
+            <div v-if="canChoosePlace" class="plan__place-actions">
+              <template v-if="!confirmingPlaceRemove">
+                <button
+                  class="hg-btn hg-btn--outline hg-btn--sm"
+                  type="button"
+                  :disabled="placeBusy"
+                  data-tst-id="plan-place-change"
+                  @click="pickerOpen = true"
+                >
+                  <span>Change</span>
+                </button>
+                <button
+                  class="hg-btn hg-btn--quiet hg-btn--sm"
+                  type="button"
+                  :disabled="placeBusy"
+                  data-tst-id="plan-place-remove"
+                  @click="confirmingPlaceRemove = true"
+                >
+                  <span>Remove</span>
+                </button>
+              </template>
+              <div v-else class="hg-confirm plan__confirm" role="group" aria-label="Remove the place from the plan?">
+                <span class="hg-confirm__q">Remove the place?</span>
+                <button
+                  class="hg-btn hg-btn--danger-filled hg-btn--sm"
+                  :class="{ 'is-loading': placeBusy }"
+                  type="button"
+                  :disabled="placeBusy"
+                  data-tst-id="plan-place-remove-confirm"
+                  @click="removePlace"
+                >
+                  <span>Remove</span>
+                </button>
+                <button
+                  class="hg-btn hg-btn--quiet hg-btn--sm"
+                  type="button"
+                  :disabled="placeBusy"
+                  @click="confirmingPlaceRemove = false"
+                >
+                  Keep
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="canChoosePlace" class="plan__place-none">
+            <p class="hg-soft">No place chosen yet.</p>
+            <button
+              class="hg-btn hg-btn--neutral"
+              type="button"
+              :disabled="placeBusy"
+              data-tst-id="plan-place-choose"
+              @click="pickerOpen = true"
+            >
+              <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Choose a place</span>
+            </button>
+          </div>
+
+          <p v-else class="hg-soft" data-tst-id="plan-place-not-yet">The organiser has not chosen a place yet.</p>
+        </section>
+
+        <SuggestedPlaces
+          :event="event"
+          :can-ask="canSetPreference"
+          :can-choose="canChoosePlace"
+          :choosing="placeBusy"
+          @updated="event = $event"
+          @choose="choosePlace"
+        />
 
         <!-- Everyone coming says where they are and how far they travel; places are suggested from it. -->
         <section v-if="canSetPreference" data-tst-id="plan-preference">
@@ -547,6 +783,10 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           <h2 class="plan__rail-title plan__rail-title--tight">People</h2>
           <p class="plan__counts hg-num" data-tst-id="plan-people-counts">{{ peopleCounts }}</p>
 
+          <p v-if="anyMarkable" class="plan__came-note" data-tst-id="plan-came-note">
+            Mark anyone who said they were coming and did not come. It lowers their reliability rating.
+          </p>
+
           <ul class="hg-list plan__people">
             <!-- The organiser first; not an invitee, so not one of the "invitee" rows. -->
             <li class="hg-row plan__person" data-tst-id="plan-organiser">
@@ -570,7 +810,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
               v-for="invitee in guests"
               :key="invitee.invitationId"
               class="hg-row plan__person"
-              :class="{ 'plan__person--confirming': removing === invitee.userId }"
+              :class="{ 'plan__person--confirming': removing === invitee.userId || markable(invitee) }"
               data-tst-id="invitee"
             >
               <UserAvatar :name="invitee.displayName" :user-id="invitee.userId" :size="32" />
@@ -589,7 +829,15 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
               </RouterLink>
 
               <span class="hg-row__trail">
-                <span class="hg-badge" :class="STATUS_LOOK[invitee.status].kind">
+                <!-- For the organiser a mark replaces "Coming": the two would contradict each other. -->
+                <span
+                  v-if="markable(invitee) && invitee.noShow"
+                  class="hg-badge hg-badge--danger"
+                  data-tst-id="invitee-no-show-badge"
+                >
+                  Did not come
+                </span>
+                <span v-else class="hg-badge" :class="STATUS_LOOK[invitee.status].kind">
                   {{ STATUS_LOOK[invitee.status].text }}
                 </span>
 
@@ -632,6 +880,32 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
                 </button>
                 <button class="hg-btn hg-btn--quiet hg-btn--sm" type="button" :disabled="busy" @click="removing = null">
                   Keep
+                </button>
+              </span>
+
+              <!-- After the plan: did this guest come. A line of its own, as the confirmation above. -->
+              <span v-if="markable(invitee)" class="plan__person-came">
+                <button
+                  v-if="invitee.noShow"
+                  class="hg-btn hg-btn--quiet hg-btn--sm"
+                  type="button"
+                  :disabled="marking === invitee.userId"
+                  :aria-label="'Undo: ' + invitee.displayName + ' did come'"
+                  data-tst-id="invitee-came"
+                  @click="markCame(invitee, true)"
+                >
+                  <span>Undo</span>
+                </button>
+                <button
+                  v-else
+                  class="hg-btn hg-btn--quiet hg-btn--sm"
+                  type="button"
+                  :disabled="marking === invitee.userId"
+                  :aria-label="invitee.displayName + ' did not come'"
+                  data-tst-id="invitee-no-show"
+                  @click="markCame(invitee, false)"
+                >
+                  <span>Did not come</span>
                 </button>
               </span>
             </li>
@@ -764,6 +1038,17 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           <p class="plan__end-note">The plan and its chat leave your lists. The others keep them.</p>
         </div>
       </aside>
+
+      <!-- In the body, not here: a fixed layer inside the page column could be clipped or covered. -->
+      <Teleport to="body">
+        <PlacePicker
+          v-if="pickerOpen"
+          :category="event.eventType"
+          :busy="placeBusy"
+          @choose="choosePlace($event.id)"
+          @close="pickerOpen = false"
+        />
+      </Teleport>
     </div>
   </div>
 </template>
@@ -783,6 +1068,15 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
   flex-direction: column;
   gap: var(--s-6);
   min-width: 0;
+}
+
+/* ---- the picture: 16:9 while narrow, a band no taller than 240px when the column is wide ---- */
+.plan__picture {
+  width: 100%;
+  max-height: 240px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-l);
+  overflow: hidden;
 }
 
 /* ---- header ---- */
@@ -846,6 +1140,64 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
   max-width: 70ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---- the venue ---- */
+.plan__place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.plan__place-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* A long name or address without spaces must not push the card wider than its column. */
+.plan__place-name,
+.plan__place-addr {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.plan__place-cat {
+  flex-wrap: wrap;
+}
+
+.plan__place-addr {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+
+.plan__place-addr .hg-icon {
+  flex: none;
+  color: var(--c-ink-soft);
+}
+
+.plan__place-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  font: var(--t-small);
+}
+
+.plan__place-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.plan__place-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
 }
 
 /* ---- sections ---- */
@@ -979,6 +1331,20 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
   justify-content: flex-end;
   height: auto;
   padding-bottom: var(--s-2);
+}
+
+/* "Did not come" / "Undo": under the name, at the right, where the badge it changes is. */
+.plan__person-came {
+  display: flex;
+  flex: 1 0 100%;
+  justify-content: flex-end;
+  padding-bottom: var(--s-2);
+}
+
+.plan__came-note {
+  margin-bottom: var(--s-2);
+  color: var(--c-ink-soft);
+  font: var(--t-small);
 }
 
 .plan__nobody {

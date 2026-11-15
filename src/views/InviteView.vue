@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { PublicEvent } from '@/api/types'
+import EventPicture from '@/components/EventPicture.vue'
 import EventSummary from '@/components/EventSummary.vue'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
@@ -115,6 +116,11 @@ async function accept(): Promise<void> {
       </div>
 
       <article v-else class="hg-card invite-page__card" data-tst-id="invite">
+        <!-- The default picture of the activity: what a plan without a photo of its venue shows. -->
+        <div class="invite-page__picture" data-tst-id="invite-picture">
+          <EventPicture :type="event.eventType" />
+        </div>
+
         <div class="invite-page__body">
           <div class="invite-page__from">
             <UserAvatar :name="event.creatorName" :size="64" />
@@ -206,6 +212,12 @@ async function accept(): Promise<void> {
   flex-direction: column;
   gap: var(--s-4);
   padding: var(--s-6) var(--s-6) var(--s-5);
+}
+
+/* The top band of the card; the card clips, so its rounded corners round the picture too. */
+.invite-page__picture {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
 }
 
 .invite-page__from {

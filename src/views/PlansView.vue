@@ -4,10 +4,11 @@
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarDays, Clock, Globe, Plus } from 'lucide-vue-next'
+import { CalendarDays, Clock, Globe, MapPin, Plus } from 'lucide-vue-next'
 import { onSignal } from '@/stores/signal'
 import { api } from '@/api'
 import type { EventDto, Invitation, Invitee } from '@/api/types'
+import EventPicture from '@/components/EventPicture.vue'
 import EventSummary from '@/components/EventSummary.vue'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
@@ -166,8 +167,16 @@ function standing(event: EventDto): { text: string; kind: string } | null {
                 class="plans__invitation-link"
                 :to="{ name: 'plan', params: { eventId: invitation.event.id } }"
               >
-                <EventSummary :event="invitation.event" />
+                <!-- The default picture of the activity: venues have no photos of their own yet. -->
+                <span class="plans__thumb">
+                  <EventPicture :type="invitation.event.eventType" />
+                </span>
+                <EventSummary class="plans__invitation-summary" :event="invitation.event" />
               </RouterLink>
+              <span v-if="invitation.event.place !== null" class="plans__place" data-tst-id="plan-card-place">
+                <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <span>{{ invitation.event.place.name }}</span>
+              </span>
             </div>
 
             <div class="plans__answers">
@@ -225,12 +234,26 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               </span>
             </div>
 
-            <h3 class="hg-plan__title">{{ event.title }}</h3>
+            <div class="plans__card-main">
+              <!-- The default picture of the activity: venues have no photos of their own yet. -->
+              <span class="plans__thumb">
+                <EventPicture :type="event.eventType" />
+              </span>
 
-            <span class="hg-plan__fact plans__when" data-tst-id="summary-when">
-              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-              {{ proposedTimesSummary(event.proposedTimes) }}
-            </span>
+              <div class="plans__card-text">
+                <h3 class="hg-plan__title">{{ event.title }}</h3>
+
+                <span class="hg-plan__fact plans__when" data-tst-id="summary-when">
+                  <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  {{ proposedTimesSummary(event.proposedTimes) }}
+                </span>
+
+                <span v-if="event.place !== null" class="plans__place" data-tst-id="plan-card-place">
+                  <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  <span>{{ event.place.name }}</span>
+                </span>
+              </div>
+            </div>
 
             <div class="plans__crowd">
               <span v-if="coming(event).length > 0" class="hg-stack">
@@ -302,12 +325,26 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               </span>
             </div>
 
-            <h3 class="hg-plan__title">{{ event.title }}</h3>
+            <div class="plans__card-main">
+              <!-- The default picture of the activity: venues have no photos of their own yet. -->
+              <span class="plans__thumb">
+                <EventPicture :type="event.eventType" />
+              </span>
 
-            <span class="hg-plan__fact plans__when" data-tst-id="summary-when">
-              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-              {{ proposedTimesSummary(event.proposedTimes) }}
-            </span>
+              <div class="plans__card-text">
+                <h3 class="hg-plan__title">{{ event.title }}</h3>
+
+                <span class="hg-plan__fact plans__when" data-tst-id="summary-when">
+                  <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  {{ proposedTimesSummary(event.proposedTimes) }}
+                </span>
+
+                <span v-if="event.place !== null" class="plans__place" data-tst-id="plan-card-place">
+                  <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  <span>{{ event.place.name }}</span>
+                </span>
+              </div>
+            </div>
 
             <div class="plans__crowd">
               <span v-if="coming(event).length > 0" class="hg-stack">
@@ -366,8 +403,15 @@ function standing(event: EventDto): { text: string; kind: string } | null {
 
 .plans__invitation-link,
 .plans__invitation-link:hover {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
   color: var(--c-ink);
+}
+
+.plans__invitation-summary {
+  flex: 1;
+  min-width: 0;
 }
 
 .plans__answers {
@@ -401,6 +445,52 @@ function standing(event: EventDto): { text: string; kind: string } | null {
 .plans__card--quiet,
 .plans__card--quiet:hover {
   color: var(--c-ink-soft);
+}
+
+/* The picture and, beside it, what the plan is. */
+.plans__card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+
+.plans__card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+/* The small picture of a plan: 3:2, the drawing fills it and is cut at the rounded corners. */
+.plans__thumb {
+  display: block;
+  flex: none;
+  width: 96px;
+  aspect-ratio: 3 / 2;
+  border-radius: var(--r-s);
+  overflow: hidden;
+}
+
+/* A plan that is over is told apart at a glance: its picture fades with the rest of the card. */
+.plans__card--quiet .plans__thumb {
+  opacity: 0.6;
+}
+
+.plans__place {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.plans__place .hg-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 .plans__card-top {
@@ -509,6 +599,13 @@ function standing(event: EventDto): { text: string; kind: string } | null {
 
   .plans__new {
     width: 100%;
+  }
+}
+
+/* A narrow phone: the picture gives way to the title. */
+@media (max-width: 399px) {
+  .plans__thumb {
+    width: 64px;
   }
 }
 </style>

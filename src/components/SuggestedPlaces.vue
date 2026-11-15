@@ -4,7 +4,7 @@
 // The look is the designers' "hg-places": cards side by side, one under another on a phone.
 
 import { computed, ref } from 'vue'
-import { MapPin, Star } from 'lucide-vue-next'
+import { Check, MapPin, Star } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { EventDto, Suggestion } from '@/api/types'
@@ -15,11 +15,17 @@ const props = defineProps<{
   event: EventDto
   /** The current user is part of the plan (its creator, or a guest who has not declined) and it is active. */
   canAsk: boolean
+  /** The viewer may make a suggestion the venue of the plan (the organiser of an active plan). */
+  canChoose?: boolean
+  /** A choice is being saved by the parent: the buttons wait. */
+  choosing?: boolean
 }>()
 
 const emit = defineEmits<{
   /** The event as the server returned it with fresh suggestions. */
   updated: [event: EventDto]
+  /** "Choose this place" was pressed; attaching it to the plan is the parent's job. */
+  choose: [placeId: number]
 }>()
 
 const busy = ref<boolean>(false)
@@ -84,6 +90,14 @@ function mapLink(suggestion: Suggestion): string {
   return 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '#map=16/' + lat + '/' + lon
 }
 
+/**
+ * What one spends there, or null when it is not known: an unknown price must not read as "Free".
+ * A known upper bound alone is still worth saying ("up to ...").
+ */
+function priceLine(suggestion: Suggestion): string | null {
+  return suggestion.priceMax === null ? null : priceRange(suggestion.priceMin ?? 0, suggestion.priceMax)
+}
+
 /** Only an ordinary web address becomes a link; anything else stored as a "website" is ignored. */
 function safeWebsite(website: string | null): string | null {
   return website !== null && /^https?:\/\//i.test(website) ? website : null
@@ -122,7 +136,12 @@ function safeWebsite(website: string | null): string | null {
         <h3 class="hg-place__name places__name">{{ suggestion.name }}</h3>
         <span class="hg-place__cat">
           {{ EVENT_TYPE_LOOK[suggestion.category].label }}
-          <span class="hg-place__rating" :aria-label="'Rated ' + suggestion.rating.toFixed(1) + ' out of 5'">
+          <!-- Nobody has rated it: no stars at all, rather than "0.0". -->
+          <span
+            v-if="suggestion.rating !== null"
+            class="hg-place__rating"
+            :aria-label="'Rated ' + suggestion.rating.toFixed(1) + ' out of 5'"
+          >
             <Star class="hg-icon" :stroke-width="1.5" aria-hidden="true" />{{ suggestion.rating.toFixed(1) }}
           </span>
         </span>
@@ -142,7 +161,7 @@ function safeWebsite(website: string | null): string | null {
                 : suggestion.averageDistanceMi + ' mi on average, ' + suggestion.farthestDistanceMi + ' mi for the farthest'
             }}
           </li>
-          <li>{{ priceRange(suggestion.priceMin, suggestion.priceMax) }}</li>
+          <li v-if="priceLine(suggestion) !== null">{{ priceLine(suggestion) }}</li>
           <li v-if="suggestion.phone">{{ suggestion.phone }}</li>
         </ul>
 
@@ -168,6 +187,27 @@ function safeWebsite(website: string | null): string | null {
             Website
           </a>
         </div>
+
+        <!-- The organiser makes a suggestion the venue of the plan; the one already chosen says so. -->
+        <template v-if="canChoose">
+          <span
+            v-if="event.place?.id === suggestion.placeId"
+            class="hg-badge hg-badge--success places__chosen"
+            data-tst-id="suggestion-chosen"
+          >
+            <Check class="hg-icon" :stroke-width="1.5" aria-hidden="true" />Chosen
+          </span>
+          <button
+            v-else
+            class="hg-btn hg-btn--outline hg-btn--sm places__choose"
+            type="button"
+            :disabled="choosing"
+            data-tst-id="suggestion-choose"
+            @click="emit('choose', suggestion.placeId)"
+          >
+            <span>Choose this place</span>
+          </button>
+        </template>
       </li>
     </ol>
 
@@ -234,6 +274,13 @@ function safeWebsite(website: string | null): string | null {
   margin-top: auto;
   padding-top: var(--s-3);
   font: var(--t-small);
+}
+
+/* Under the links, at their own width: a card is a column that would stretch them. */
+.places__chosen,
+.places__choose {
+  align-self: flex-start;
+  margin-top: var(--s-3);
 }
 
 .places__basis {

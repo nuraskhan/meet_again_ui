@@ -3,13 +3,14 @@
 // friends and sends. Beside the form, on a wide screen, stands the invitation as the guests will
 // see it - built here from what is typed, nothing is asked from the server for it.
 
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
-import type { EventTypeCode, EventTypeInfo, EventVisibility, Friend } from '@/api/types'
+import type { EventTypeCode, EventTypeInfo, EventVisibility, Friend, FriendAvailability } from '@/api/types'
 import { Clock, MapPin, Plus, Wallet, X } from 'lucide-vue-next'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
+import { addDays, availabilityPhrase, covers } from '@/lib/dates'
 import { dateTime, distanceRange, EVENT_TYPE_LOOK, localInputToIso, priceRange } from '@/lib/format'
 import { auth } from '@/stores/auth'
 import { errorText, toastError, toastOk } from '@/stores/toast'
@@ -77,6 +78,111 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+// ------------------------------------------------------------------ who is busy on a proposed day
+
+/** The server answers for a window of about 400 days at most; one request covers this many. */
+const MARKS_WINDOW_DAYS: number = 366
+/** Typing a date passes through unfinished ones: ask only when the typing has paused. */
+const MARKS_DELAY_MS: number = 400
+
+/** What friends marked for the proposed days (all friends: ticking one shows their hint at once). */
+const friendMarks = ref<FriendAvailability[]>([])
+
+/**
+ * The calendar day of each date row; null for an empty or unfinished one.
+ * WHY the first ten characters and no Date: the field holds local time ("2030-01-05T18:00"), so
+ * its date part IS the day the user means - the same plain day friends mark in their calendars
+ * (see lib/dates.ts). Going through a Date and UTC could move it to the neighbour day.
+ */
+const rowDays = computed<(string | null)[]>(() =>
+  form.times.map((value: string) =>
+    /^\d{4}-\d{2}-\d{2}T/.test(value) && localInputToIso(value) !== null ? value.slice(0, 10) : null,
+  ),
+)
+
+/** The distinct proposed days, earliest first, as one text: it changes when a new answer is needed. */
+const daysKey = computed<string>(() =>
+  [...new Set<string>(rowDays.value.filter((day): day is string => day !== null))].sort().join(','),
+)
+
+let marksTimer: number | undefined
+/** Counts the requests: an answer for days that are no longer proposed is dropped. */
+let marksAsked: number = 0
+
+watch([daysKey, () => friends.value.length], () => {
+  window.clearTimeout(marksTimer)
+  marksTimer = window.setTimeout(loadFriendMarks, MARKS_DELAY_MS)
+})
+
+onBeforeUnmount(() => window.clearTimeout(marksTimer))
+
+async function loadFriendMarks(): Promise<void> {
+  const request: number = ++marksAsked
+  const days: string[] = daysKey.value === '' ? [] : daysKey.value.split(',')
+  const first: string | undefined = days[0]
+  const last: string | undefined = days[days.length - 1]
+  if (first === undefined || last === undefined || friends.value.length === 0) {
+    friendMarks.value = []
+    return
+  }
+  try {
+    // Usually the dates are close and one window holds them all; dates more than a year apart
+    // are asked day by day, so the window never grows beyond what the server accepts.
+    const answers: FriendAvailability[][] =
+      addDays(first, MARKS_WINDOW_DAYS) >= last
+        ? [await api.friendsAvailability(first, last)]
+        : await Promise.all(days.map((day: string) => api.friendsAvailability(day, day)))
+    if (request !== marksAsked) {
+      return
+    }
+    // Asked day by day, a long mark comes back once per day: keep one of each.
+    const seen = new Set<string>()
+    const marks: FriendAvailability[] = []
+    for (const mark of answers.flat()) {
+      const key: string = [mark.userId, mark.kind, mark.fromDate, mark.toDate].join('|')
+      if (!seen.has(key)) {
+        seen.add(key)
+        marks.push(mark)
+      }
+    }
+    friendMarks.value = marks
+  } catch {
+    // The hints are a courtesy and nothing waits for them: without an answer the form works as
+    // it always did, so a failure here is not worth interrupting the typing with a message.
+    if (request === marksAsked) {
+      friendMarks.value = []
+    }
+  }
+}
+
+interface BusyHint {
+  text: string
+  /** A FREE mark: good news, shown as such. */
+  free: boolean
+}
+
+/** What the ticked friends marked for the day of a date row: who is busy or away first. */
+function busyHints(index: number): BusyHint[] {
+  const day: string | null = rowDays.value[index] ?? null
+  if (day === null) {
+    return []
+  }
+  return friendMarks.value
+    .filter((mark) => form.inviteeIds.includes(mark.userId) && covers(mark, day))
+    .map(
+      (mark): BusyHint => ({
+        // "Timur is busy that day", "Dana is in Almaty".
+        text:
+          mark.displayName +
+          ' is ' +
+          availabilityPhrase(mark.kind, mark.city) +
+          (mark.kind === 'TRIP' ? '' : ' that day'),
+        free: mark.kind === 'FREE',
+      }),
+    )
+    .sort((a, b) => Number(a.free) - Number(b.free))
+}
 
 /** The "pre-filled" part: the type brings its title, distance and budget. */
 function choose(type: EventTypeInfo): void {
@@ -221,24 +327,40 @@ async function send(): Promise<void> {
             </p>
 
             <div class="app-stack app-stack--tight">
-              <div v-for="(_, index) in form.times" :key="index" class="new__time">
-                <input
-                  v-model="form.times[index]"
-                  class="hg-input hg-num"
-                  type="datetime-local"
-                  :aria-label="'Date and time ' + (index + 1)"
-                  :data-tst-id="'plan-new-when-' + index"
-                />
-                <button
-                  v-if="form.times.length > 1"
-                  class="hg-iconbtn"
-                  type="button"
-                  :aria-label="'Remove date ' + (index + 1)"
-                  title="Remove this date"
-                  @click="form.times.splice(index, 1)"
+              <div v-for="(_, index) in form.times" :key="index">
+                <div class="new__time">
+                  <input
+                    v-model="form.times[index]"
+                    class="hg-input hg-num"
+                    type="datetime-local"
+                    :aria-label="'Date and time ' + (index + 1)"
+                    :data-tst-id="'plan-new-when-' + index"
+                  />
+                  <button
+                    v-if="form.times.length > 1"
+                    class="hg-iconbtn"
+                    type="button"
+                    :aria-label="'Remove date ' + (index + 1)"
+                    title="Remove this date"
+                    @click="form.times.splice(index, 1)"
+                  >
+                    <X class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  </button>
+                </div>
+
+                <!-- What the ticked friends marked for that day. Only a hint: nothing stops the
+                     invitation - the friend may well come anyway. -->
+                <p
+                  v-if="busyHints(index).length > 0"
+                  class="new__busy"
+                  aria-live="polite"
+                  data-tst-id="plan-new-busy"
                 >
-                  <X class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-                </button>
+                  <template v-for="(hint, position) in busyHints(index)" :key="position">
+                    <span v-if="position > 0" aria-hidden="true"> · </span>
+                    <span :class="hint.free ? 'new__busy-free' : 'new__busy-taken'">{{ hint.text }}</span>
+                  </template>
+                </p>
               </div>
             </div>
 
@@ -544,6 +666,23 @@ async function send(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+}
+
+/* Under its date. Busy or away is said in the warning colour and in words; free in the colour of
+   good news. */
+.new__busy {
+  margin-top: var(--s-1);
+  font: var(--t-small);
+  color: var(--c-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.new__busy-taken {
+  color: var(--c-warning);
+}
+
+.new__busy-free {
+  color: var(--c-success);
 }
 
 .new__time-add {

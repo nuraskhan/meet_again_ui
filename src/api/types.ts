@@ -50,6 +50,21 @@ export interface Profile {
   photos: Photo[]
   interests: string[]
   prompts: Prompt[]
+  /** How reliable the person is, counted from their history of plans. */
+  reliability: Reliability
+}
+
+/**
+ * How reliable a person is: of what they said they would do, how much they did.
+ * A promise is saying "coming" to a plan, or creating one.
+ */
+export interface Reliability {
+  /** 0 to 100: the share of promises kept. Null while there are too few promises to judge by. */
+  score: number | null
+  /** Came to a plan they said they would come to, or held their own. */
+  kept: number
+  /** Left after saying "coming", did not come, or cancelled a plan people were coming to. */
+  broken: number
 }
 
 /** The current user's own profile: everything others see, plus what only they may see. */
@@ -149,6 +164,8 @@ export interface Invitee {
   locationText: string | null
   /** The guest shared the location of their device. The coordinates themselves are never sent. */
   locationShared: boolean
+  /** The organiser marked, after the plan, that this guest said "coming" and did not come. */
+  noShow: boolean
 }
 
 /** The current user's own preference for an event, coordinates included. */
@@ -195,6 +212,8 @@ export interface EventDto extends EventFacts {
   invitees: Invitee[]
   /** What the current user said about themselves for this event; null until they say it. */
   myPreference: Preference | null
+  /** The venue the organiser chose for the plan; null = not chosen. */
+  place: Place | null
   /** When places were last suggested; null = never. */
   suggestedAt: string | null
   /** The places suggested, best first. Empty while never suggested, and when nothing was found. */
@@ -274,9 +293,11 @@ export interface Suggestion {
   latitude: number
   longitude: number
   /** How good the place is, 0 to 5. */
-  rating: number
-  priceMin: number
-  priceMax: number
+  /** 0 to 5; null = nobody has rated it. */
+  rating: number | null
+  /** Null = what one spends there is not known. */
+  priceMin: number | null
+  priceMax: number | null
   website: string | null
   phone: string | null
   averageDistanceMi: number
@@ -318,6 +339,73 @@ export interface FeedItem extends EventFacts {
   full: boolean
   /** CREATOR, the current user's own answer, or NONE for someone not part of it yet. */
   myStanding: 'CREATOR' | 'NONE' | InvitationStatus
+  /** The inviter's reliability, 0 to 100; null while there is too little history to judge by. */
+  creatorReliability: number | null
+  /** The name of the venue chosen for the plan; null = not chosen. */
+  placeName: string | null
+}
+
+/** A venue: a place a plan can be held at. */
+export interface Place {
+  id: number
+  name: string
+  /** What one does there: the same values as the type of a plan. */
+  category: EventTypeCode
+  description: string | null
+  address: string
+  /** The city it is in; null if not known. */
+  city: string | null
+  latitude: number
+  longitude: number
+  /** 0 to 5; null = nobody has rated it. */
+  rating: number | null
+  /** How many reviews the rating rests on; null = unknown. */
+  reviewCount: number | null
+  /** Expected spending per person; null = not known. */
+  priceMin: number | null
+  priceMax: number | null
+  website: string | null
+  phone: string | null
+  /** An invented demonstration place, not a real business. */
+  sample: boolean
+}
+
+/** What a person marked in their calendar for some days. */
+export type AvailabilityKind = 'BUSY' | 'FREE' | 'TRIP'
+
+/**
+ * Days the current user marked in their own calendar. Days are plain dates ("2030-01-05"): no
+ * time and no time zone - "the 5th" is the 5th for everyone.
+ */
+export interface Availability {
+  id: number
+  kind: AvailabilityKind
+  fromDate: string
+  /** The last day, included. */
+  toDate: string
+  /** Where to, for a TRIP; null otherwise. */
+  city: string | null
+  /** The user's own note; friends never see it. */
+  note: string | null
+}
+
+export interface SaveAvailabilityRequest {
+  kind: AvailabilityKind
+  fromDate: string
+  toDate: string
+  city?: string
+  note?: string
+}
+
+/** Days a friend marked, as their friends see them: no note. */
+export interface FriendAvailability {
+  userId: number
+  displayName: string
+  avatarUrl: string | null
+  kind: AvailabilityKind
+  fromDate: string
+  toDate: string
+  city: string | null
 }
 
 export type NotificationKind =

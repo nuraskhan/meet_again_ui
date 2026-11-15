@@ -7,7 +7,17 @@
 
 import type { Component } from 'vue'
 import { ref } from 'vue'
-import { Bell, Calendar, Compass, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Users } from 'lucide-vue-next'
+import {
+  Bell,
+  CalendarDays,
+  Compass,
+  ListChecks,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Users,
+} from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -44,7 +54,10 @@ function readFolded(): boolean {
 
 const NAV: { name: string; label: string; icon: Component }[] = [
   { name: 'feed', label: 'Feed', icon: Compass },
-  { name: 'plans', label: 'Plans', icon: Calendar },
+  // Plans are a list; the calendar picture belongs to the calendar alone - folded to icons, two
+  // calendars one under the other could not be told apart.
+  { name: 'plans', label: 'Plans', icon: ListChecks },
+  { name: 'calendar', label: 'Calendar', icon: CalendarDays },
   { name: 'friends', label: 'Friends', icon: Users },
   { name: 'chats', label: 'Chats', icon: MessageCircle },
 ]
@@ -229,7 +242,7 @@ function bellName(): string {
         :aria-current="isCurrent('plans') ? 'page' : undefined"
         data-tst-id="tab-plans"
       >
-        <Calendar class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <ListChecks class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
         <span>Plans</span>
       </RouterLink>
       <RouterLink class="hg-tab" :to="{ name: 'plan-new' }" aria-label="New plan" data-tst-id="tab-plan-new">

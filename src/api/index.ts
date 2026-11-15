@@ -3,6 +3,10 @@
 import { get, post, upload } from './http'
 import type {
   AppNotification,
+  Availability,
+  FriendAvailability,
+  Place,
+  SaveAvailabilityRequest,
   AuthResponse,
   Chat,
   ChatMember,
@@ -65,6 +69,43 @@ export const api = {
   events: () => get<EventDto[]>('/event/list'),
   event: (eventId: number) => get<EventDto>('/event/' + eventId),
   cancelEvent: (eventId: number) => post<void>('/event/' + eventId + '/cancel'),
+  /** The organiser chooses the venue of the plan, or changes it. */
+  attachPlace: (eventId: number, placeId: number) =>
+    post<EventDto>('/event/' + eventId + '/place/' + placeId + '/attach'),
+  /** The organiser takes the venue off the plan. */
+  detachPlace: (eventId: number) => post<EventDto>('/event/' + eventId + '/place/detach'),
+  /** After the plan the organiser marks a guest who said "coming" and did not come... */
+  markNoShow: (eventId: number, userId: number) =>
+    post<EventDto>('/event/' + eventId + '/guest/' + userId + '/no-show'),
+  /** ...or takes the mark back. */
+  markCame: (eventId: number, userId: number) =>
+    post<EventDto>('/event/' + eventId + '/guest/' + userId + '/came'),
+
+  // ---------------------------------------------------------------- venues
+  /** Venues to choose from, the best rated first; every filter is optional. */
+  places: (filter: { category?: EventTypeCode; city?: string; q?: string; limit?: number }) => {
+    const query = new URLSearchParams()
+    if (filter.category !== undefined) query.set('category', filter.category)
+    if (filter.city !== undefined && filter.city !== '') query.set('city', filter.city)
+    if (filter.q !== undefined && filter.q !== '') query.set('q', filter.q)
+    if (filter.limit !== undefined) query.set('limit', String(filter.limit))
+    return get<Place[]>('/place/list?' + query.toString())
+  },
+  /** The cities there are venues in, the one with the most venues first. */
+  placeCities: () => get<string[]>('/place/city/list'),
+
+  // ---------------------------------------------------------------- the calendar of availability
+  /** The user's own marks that touch the days from..to ("2030-01-05", both included). */
+  availability: (from: string, to: string) =>
+    get<Availability[]>('/availability/list?from=' + from + '&to=' + to),
+  /** What friends marked for those days, without their notes; optionally of one friend only. */
+  friendsAvailability: (from: string, to: string, userId?: number) =>
+    get<FriendAvailability[]>(
+      '/availability/friends?from=' + from + '&to=' + to + (userId === undefined ? '' : '&userId=' + userId),
+    ),
+  addAvailability: (request: SaveAvailabilityRequest) => post<Availability>('/availability/add', request),
+  removeAvailability: (id: number) => post<void>('/availability/' + id + '/remove'),
+
   /** The creator deletes the plan: it and its chat disappear for everyone. */
   deleteEvent: (eventId: number) => post<void>('/event/' + eventId + '/delete'),
 

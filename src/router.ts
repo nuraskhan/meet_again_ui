@@ -62,6 +62,8 @@ export const router = createRouter({
           component: () => import('./views/PlanView.vue'),
           props: (route) => ({ eventId: Number(route.params.eventId) }),
         },
+        // The user's plans and marked days by month.
+        { path: 'calendar', name: 'calendar', component: () => import('./views/CalendarView.vue') },
         { path: 'friends', name: 'friends', component: () => import('./views/FriendsView.vue') },
         {
           // The list of chats and, next to it, the open one: ChatsView is the layout of both, so

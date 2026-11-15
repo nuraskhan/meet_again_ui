@@ -6,7 +6,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api } from '@/api'
 import { serverFileUrl } from '@/api/http'
-import type { Photo, Prompt } from '@/api/types'
+import type { Photo, Prompt, Reliability } from '@/api/types'
+import ReliabilityBadge from '@/components/ReliabilityBadge.vue'
 import { LogOut, Plus, Star, Trash2, X } from 'lucide-vue-next'
 import { auth } from '@/stores/auth'
 import { errorText, toastError, toastOk } from '@/stores/toast'
@@ -161,6 +162,9 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const photos = computed<Photo[]>(() => auth.state.profile?.photos ?? [])
 const maxPhotos = computed<number>(() => auth.state.profile?.maxPhotos ?? 0)
 const canAddPhoto = computed<boolean>(() => photos.value.length < maxPhotos.value)
+
+/** How reliable the user is, as the server counted it; null while the profile is not loaded. */
+const reliability = computed<Reliability | null>(() => auth.state.profile?.reliability ?? null)
 
 async function onFileChosen(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
@@ -587,6 +591,23 @@ function emptyToNull(value: string): string | null {
             </span>
             <span class="hg-soft hg-num">Up to {{ maxPhotos }} photos</span>
           </p>
+
+          <!-- The user's own reliability, and what it is counted from: a number nobody can explain
+               would only feel like a verdict. -->
+          <div v-if="reliability !== null" class="profile__reliability" data-tst-id="profile-reliability">
+            <p class="profile__account-line">
+              <ReliabilityBadge :score="reliability.score" />
+              <span v-if="reliability.score !== null" class="hg-soft hg-num">
+                Kept {{ reliability.kept }} of {{ reliability.kept + reliability.broken }} promises
+              </span>
+              <span v-else class="hg-soft">No reliability rating yet: it appears after three plans.</span>
+            </p>
+            <p class="profile__hint">
+              Reliability is the share of promises you kept. It goes up when you say you are coming and
+              come, or hold a plan of your own. It goes down when you leave after saying you are coming,
+              are marked as not having come, or cancel a plan people were coming to.
+            </p>
+          </div>
           <div>
             <button class="hg-btn hg-btn--outline" type="button" data-tst-id="profile-logout" @click="auth.logout()">
               <LogOut class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
@@ -784,6 +805,13 @@ function emptyToNull(value: string): string | null {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
+}
+
+.profile__reliability {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  max-width: 65ch;
 }
 
 .profile__email {

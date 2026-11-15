@@ -1,17 +1,22 @@
 <script setup lang="ts">
 // The feed: public plans anyone can join. Each card says what the plan is, who invites (their
-// picture and name are the way to their profile) and who is coming. Joining puts the user into the
-// plan's group chat.
+// picture and name are the way to their profile, with how reliable they are) and who is coming.
+// Joining puts the user into the plan's group chat.
+//
+// With room beside the feed stands a rail: the user's own reliability and their calendar - what
+// one looks at before saying "I'm coming". Without the room the head has a way to the calendar.
 
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarDays, Clock, MapPin, Plus, Wallet } from 'lucide-vue-next'
+import { CalendarDays, Clock, MapPin, Plus, Route, Wallet } from 'lucide-vue-next'
 import { api, FEED_PAGE } from '@/api'
-import { serverFileUrl } from '@/api/http'
-import type { EventTypeCode, FeedItem } from '@/api/types'
-import EventTypeIcon from '@/components/EventTypeIcon.vue'
+import type { EventTypeCode, FeedItem, Reliability } from '@/api/types'
+import CalendarPanel from '@/components/CalendarPanel.vue'
+import EventPicture from '@/components/EventPicture.vue'
+import ReliabilityBadge from '@/components/ReliabilityBadge.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { distanceRange, EVENT_TYPE_LOOK, priceRange, proposedTimesSummary } from '@/lib/format'
+import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
 const router = useRouter()
@@ -30,10 +35,44 @@ const loadingMore = ref<boolean>(false)
 const hasMore = ref<boolean>(false)
 /** The plan being joined right now, to disable its button. */
 const joining = ref<number | null>(null)
-/** Plans whose picture failed to load (removed meanwhile): they are shown as plans without one. */
-const brokenPhotos = ref<Set<number>>(new Set<number>())
 
 onMounted(() => load(false))
+
+// ------------------------------------------------------------------ the rail
+
+/**
+ * The narrowest page the rail fits in: the rail (320) + the gap (32) + two columns of cards
+ * (2 x 340 + 24). With the full sidebar that is a window of about 1400px.
+ */
+const RAIL_FROM: number = 1056
+
+const page = ref<HTMLElement | null>(null)
+/**
+ * WHY measured in script and not a media or a container query: the room depends on the sidebar,
+ * which the user folds by hand at any window width, so the window's width says too little; and a
+ * rail hidden only by CSS would still be mounted - the calendar would load its three lists on
+ * every phone for nobody to see.
+ */
+const railShown = ref<boolean>(false)
+let pageWatch: ResizeObserver | null = null
+
+onMounted(() => {
+  if (page.value === null || typeof ResizeObserver === 'undefined') {
+    return
+  }
+  pageWatch = new ResizeObserver((entries: ResizeObserverEntry[]) => {
+    const width: number | undefined = entries[0]?.contentRect.width
+    if (width !== undefined) {
+      railShown.value = width >= RAIL_FROM
+    }
+  })
+  pageWatch.observe(page.value)
+})
+
+onBeforeUnmount(() => pageWatch?.disconnect())
+
+/** The user's own reliability; null while the profile is on its way. */
+const myReliability = computed<Reliability | null>(() => auth.state.profile?.reliability ?? null)
 
 /** @param more false = start over from the newest; true = add the next page */
 async function load(more: boolean): Promise<void> {
@@ -105,15 +144,6 @@ function crowd(item: FeedItem): string {
   return item.goingCount + ' coming'
 }
 
-/** The picture on the card is the inviter's own; null = none, or it did not load. */
-function photo(item: FeedItem): string | null {
-  return brokenPhotos.value.has(item.id) ? null : serverFileUrl(item.creatorAvatarUrl)
-}
-
-function photoFailed(item: FeedItem): void {
-  brokenPhotos.value = new Set<number>([...brokenPhotos.value, item.id])
-}
-
 /** The plan page is open only to those who are part of the plan; the others join first. */
 function canOpen(item: FeedItem): boolean {
   return item.myStanding === 'CREATOR' || item.myStanding === 'ACCEPTED' || item.myStanding === 'PENDING'
@@ -121,229 +151,262 @@ function canOpen(item: FeedItem): boolean {
 </script>
 
 <template>
-  <div class="app-col app-col--wide">
-    <div class="app-head">
-      <h1 class="app-head__title">Feed</h1>
-      <RouterLink
-        class="hg-btn hg-btn--neutral feed__new"
-        :to="{ name: 'plan-new', query: { public: '1' } }"
-        data-tst-id="feed-new"
-      >
-        <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-        <span>New public plan</span>
-      </RouterLink>
-    </div>
-
-    <!-- ------------------------------------------------------------ filter -->
-    <div class="feed__types" role="group" aria-label="Filter by activity">
-      <button
-        class="hg-chip feed__type"
-        type="button"
-        :aria-pressed="type === null"
-        data-tst-id="feed-type-all"
-        @click="pick(null)"
-      >
-        All
-      </button>
-      <button
-        v-for="candidate in TYPES"
-        :key="candidate"
-        class="hg-chip feed__type"
-        type="button"
-        :aria-pressed="type === candidate"
-        :data-tst-id="'feed-type-' + candidate"
-        @click="pick(candidate)"
-      >
-        {{ EVENT_TYPE_LOOK[candidate].label }}
-      </button>
-    </div>
-
-    <!-- ------------------------------------------------------------ loading: the shape of the cards -->
-    <div v-if="loading" class="feed__grid" aria-busy="true">
-      <span class="hg-sr">Loading the plans</span>
-      <div v-for="index in SKELETONS" :key="index" class="feed__item" aria-hidden="true">
-        <span class="hg-skel feed__skel-photo"></span>
-        <span class="hg-skel feed__skel-title"></span>
-        <span class="hg-skel hg-skel--line feed__skel-line"></span>
-        <span class="hg-skel hg-skel--line feed__skel-line feed__skel-line--short"></span>
-        <div class="feed__foot">
-          <span class="hg-skel hg-skel--circle feed__skel-face"></span>
-          <span class="hg-skel hg-skel--line feed__skel-crowd"></span>
-        </div>
-      </div>
-    </div>
-
-    <div v-else-if="items.length === 0" class="hg-empty" data-tst-id="feed-empty">
-      <CalendarDays class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-      <h2 class="hg-empty__title">{{ type === null ? 'No public plans yet' : 'No plans of this kind' }}</h2>
-      <p class="hg-empty__text">
-        {{
-          type === null
-            ? 'Nobody has invited everyone yet. You can be the first.'
-            : 'There are no public plans of this kind right now. You can start one.'
-        }}
-      </p>
-      <RouterLink class="hg-btn hg-btn--primary feed__start" :to="{ name: 'plan-new', query: { public: '1' } }">
-        <span>New public plan</span>
-      </RouterLink>
-    </div>
-
-    <template v-else>
-      <div class="feed__grid">
-        <article v-for="item in items" :key="item.id" class="feed__item" data-tst-id="feed-item">
-          <!-- With a picture: the inviter stands on it, and the whole picture leads to their profile. -->
-          <RouterLink
-            v-if="photo(item) !== null"
-            class="hg-photo feed__photo"
-            :to="{ name: 'person', params: { userId: item.creatorId } }"
-            data-tst-id="feed-inviter"
-          >
-            <img :src="photo(item) ?? undefined" alt="" loading="lazy" @error="photoFailed(item)" />
-            <span class="hg-photo__top">
-              <span class="hg-photo__chip">{{ EVENT_TYPE_LOOK[item.eventType].label }}</span>
-            </span>
-            <span class="hg-photo__shade">
-              <UserAvatar :name="item.creatorName" :user-id="item.creatorId" :size="40" />
-              <span class="feed__inviter-text"><b>{{ item.creatorName }}</b> invites</span>
-            </span>
-          </RouterLink>
-
-          <!-- Without one: the activity's icon in its place, and the inviter in a line below. -->
-          <template v-else>
-            <div class="hg-photo">
-              <span class="hg-photo__top">
-                <span class="hg-photo__chip">{{ EVENT_TYPE_LOOK[item.eventType].label }}</span>
-              </span>
-              <span class="hg-photo__empty">
-                <EventTypeIcon :type="item.eventType" :size="48" />
-              </span>
-            </div>
-            <RouterLink
-              class="feed__inviter"
-              :to="{ name: 'person', params: { userId: item.creatorId } }"
-              data-tst-id="feed-inviter"
-            >
-              <UserAvatar :name="item.creatorName" :user-id="item.creatorId" :size="24" />
-              <span class="feed__inviter-text"><b>{{ item.creatorName }}</b> invites</span>
+  <div ref="page" class="app-col app-col--rail">
+    <div class="feed" :class="{ 'feed--rail': railShown }">
+      <div class="feed__main">
+        <div class="app-head">
+          <h1 class="app-head__title">Feed</h1>
+          <!-- Without the rail: the user's reliability in short, and the way to the calendar. -->
+          <template v-if="!railShown">
+            <ReliabilityBadge :score="myReliability?.score ?? null" compact />
+            <RouterLink class="hg-btn hg-btn--outline" :to="{ name: 'calendar' }" data-tst-id="feed-calendar">
+              <CalendarDays class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Calendar</span>
             </RouterLink>
           </template>
-
-          <RouterLink v-if="canOpen(item)" class="feed__title-link" :to="{ name: 'plan', params: { eventId: item.id } }">
-            <h2 class="feed__title app-clamp-2">{{ item.title }}</h2>
+          <RouterLink
+            class="hg-btn hg-btn--neutral feed__new"
+            :to="{ name: 'plan-new', query: { public: '1' } }"
+            data-tst-id="feed-new"
+          >
+            <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+            <span>New public plan</span>
           </RouterLink>
-          <h2 v-else class="feed__title app-clamp-2">{{ item.title }}</h2>
+        </div>
 
-          <p v-if="item.description" class="feed__note app-clamp-2">{{ item.description }}</p>
+        <!-- ------------------------------------------------------------ filter -->
+        <div class="feed__types" role="group" aria-label="Filter by activity">
+          <button
+            class="hg-chip feed__type"
+            type="button"
+            :aria-pressed="type === null"
+            data-tst-id="feed-type-all"
+            @click="pick(null)"
+          >
+            All
+          </button>
+          <button
+            v-for="candidate in TYPES"
+            :key="candidate"
+            class="hg-chip feed__type"
+            type="button"
+            :aria-pressed="type === candidate"
+            :data-tst-id="'feed-type-' + candidate"
+            @click="pick(candidate)"
+          >
+            {{ EVENT_TYPE_LOOK[candidate].label }}
+          </button>
+        </div>
 
-          <ul class="hg-plan__facts feed__facts">
-            <li class="hg-plan__fact" data-tst-id="summary-when">
-              <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-              {{ proposedTimesSummary(item.proposedTimes) }}
-            </li>
-            <li class="hg-plan__fact">
-              <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-              {{ distanceRange(item.distanceMinMi, item.distanceMaxMi) }}
-            </li>
-            <li class="hg-plan__fact">
-              <Wallet class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-              {{ priceRange(item.priceMin, item.priceMax) }}
-            </li>
-          </ul>
-
-          <div class="feed__foot">
-            <!-- Who is coming: a few faces, each a way to a profile, and the count. -->
-            <span class="feed__crowd">
-              <span v-if="item.going.length > 0" class="hg-stack">
-                <RouterLink
-                  v-for="person in item.going"
-                  :key="person.userId"
-                  class="feed__face"
-                  :to="{ name: 'person', params: { userId: person.userId } }"
-                  :aria-label="person.displayName"
-                  :title="person.displayName"
-                >
-                  <UserAvatar
-                    :name="person.displayName"
-                    :user-id="person.userId"
-                    :avatar-url="person.avatarUrl"
-                    :size="32"
-                  />
-                </RouterLink>
-              </span>
-              <span class="feed__count hg-num" data-tst-id="feed-crowd">{{ crowd(item) }}</span>
-            </span>
-
-            <span class="feed__action">
-              <template v-if="item.myStanding === 'CREATOR'">
-                <span class="hg-badge">You organise</span>
-                <RouterLink class="hg-btn hg-btn--quiet feed__open" :to="{ name: 'plan', params: { eventId: item.id } }">
-                  <span>Open</span>
-                </RouterLink>
-              </template>
-
-              <template v-else-if="item.myStanding === 'ACCEPTED' || item.myStanding === 'PENDING'">
-                <span v-if="item.myStanding === 'ACCEPTED'" class="hg-badge hg-badge--success">You are coming</span>
-                <span v-else class="hg-badge hg-badge--warning">You are invited</span>
-                <RouterLink
-                  class="hg-btn hg-btn--quiet feed__open"
-                  :to="{ name: 'plan', params: { eventId: item.id } }"
-                  data-tst-id="feed-open"
-                >
-                  <span>Open</span>
-                </RouterLink>
-              </template>
-
-              <template v-else-if="item.myStanding === 'REQUESTED'">
-                <span class="hg-badge hg-badge--warning" data-tst-id="feed-requested">Request sent</span>
-                <button
-                  class="hg-btn hg-btn--quiet"
-                  :class="{ 'is-loading': joining === item.id }"
-                  type="button"
-                  :disabled="joining === item.id"
-                  data-tst-id="feed-take-back"
-                  @click="takeBack(item)"
-                >
-                  <span>Take back</span>
-                </button>
-              </template>
-
-              <span v-else-if="item.myStanding === 'REMOVED'" class="hg-badge hg-badge--danger">
-                Not available to you
-              </span>
-
-              <span v-else-if="item.full" class="hg-btn hg-btn--quiet is-disabled feed__full" aria-disabled="true">
-                Full
-              </span>
-
-              <button
-                v-else
-                class="hg-btn hg-btn--primary"
-                :class="{ 'is-loading': joining === item.id }"
-                type="button"
-                :disabled="joining === item.id"
-                data-tst-id="feed-join"
-                @click="join(item)"
-              >
-                <span>{{ item.myStanding === 'DECLINED' ? 'Ask again' : 'Ask to join' }}</span>
-              </button>
-            </span>
+        <!-- ------------------------------------------------------------ loading: the shape of the cards -->
+        <div v-if="loading" class="feed__grid" aria-busy="true">
+          <span class="hg-sr">Loading the plans</span>
+          <div v-for="index in SKELETONS" :key="index" class="feed__item" aria-hidden="true">
+            <span class="hg-skel feed__skel-photo"></span>
+            <span class="hg-skel feed__skel-title"></span>
+            <span class="hg-skel hg-skel--line feed__skel-line"></span>
+            <span class="hg-skel hg-skel--line feed__skel-line feed__skel-line--short"></span>
+            <div class="feed__foot">
+              <span class="hg-skel hg-skel--circle feed__skel-face"></span>
+              <span class="hg-skel hg-skel--line feed__skel-crowd"></span>
+            </div>
           </div>
-        </article>
+        </div>
+
+        <div v-else-if="items.length === 0" class="hg-empty" data-tst-id="feed-empty">
+          <CalendarDays class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+          <h2 class="hg-empty__title">{{ type === null ? 'No public plans yet' : 'No plans of this kind' }}</h2>
+          <p class="hg-empty__text">
+            {{
+              type === null
+                ? 'Nobody has invited everyone yet. You can be the first.'
+                : 'There are no public plans of this kind right now. You can start one.'
+            }}
+          </p>
+          <RouterLink class="hg-btn hg-btn--primary feed__start" :to="{ name: 'plan-new', query: { public: '1' } }">
+            <span>New public plan</span>
+          </RouterLink>
+        </div>
+
+        <template v-else>
+          <div class="feed__grid">
+            <article v-for="item in items" :key="item.id" class="feed__item" data-tst-id="feed-item">
+              <!-- The picture is the drawn scene of the activity: the feed has no photograph of a
+                   venue to show, so every plan gets the default picture of its kind. The inviter
+                   stands on it - face and name lead to their profile - with how reliable they are. -->
+              <div class="hg-photo">
+                <EventPicture :type="item.eventType" />
+                <span class="hg-photo__top">
+                  <span class="hg-photo__chip">{{ EVENT_TYPE_LOOK[item.eventType].label }}</span>
+                </span>
+                <span class="hg-photo__shade feed__shade">
+                  <RouterLink
+                    class="feed__inviter"
+                    :to="{ name: 'person', params: { userId: item.creatorId } }"
+                    data-tst-id="feed-inviter"
+                  >
+                    <UserAvatar
+                      :name="item.creatorName"
+                      :user-id="item.creatorId"
+                      :avatar-url="item.creatorAvatarUrl"
+                      :size="40"
+                    />
+                    <span class="feed__inviter-text"><b>{{ item.creatorName }}</b> invites</span>
+                  </RouterLink>
+                  <ReliabilityBadge :score="item.creatorReliability" compact />
+                </span>
+              </div>
+
+              <RouterLink
+                v-if="canOpen(item)"
+                class="feed__title-link"
+                :to="{ name: 'plan', params: { eventId: item.id } }"
+              >
+                <h2 class="feed__title app-clamp-2">{{ item.title }}</h2>
+              </RouterLink>
+              <h2 v-else class="feed__title app-clamp-2">{{ item.title }}</h2>
+
+              <p v-if="item.description" class="feed__note app-clamp-2">{{ item.description }}</p>
+
+              <ul class="hg-plan__facts feed__facts">
+                <li class="hg-plan__fact" data-tst-id="summary-when">
+                  <Clock class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  {{ proposedTimesSummary(item.proposedTimes) }}
+                </li>
+                <!-- The venue, once the organiser has chosen one. The pin is its sign, so the
+                     distance below has a sign of its own. -->
+                <li v-if="item.placeName" class="hg-plan__fact" data-tst-id="feed-place">
+                  <MapPin class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  <span class="feed__place">{{ item.placeName }}</span>
+                </li>
+                <li class="hg-plan__fact">
+                  <Route class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  {{ distanceRange(item.distanceMinMi, item.distanceMaxMi) }}
+                </li>
+                <li class="hg-plan__fact">
+                  <Wallet class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  {{ priceRange(item.priceMin, item.priceMax) }}
+                </li>
+              </ul>
+
+              <div class="feed__foot">
+                <!-- Who is coming: a few faces, each a way to a profile, and the count. -->
+                <span class="feed__crowd">
+                  <span v-if="item.going.length > 0" class="hg-stack">
+                    <RouterLink
+                      v-for="person in item.going"
+                      :key="person.userId"
+                      class="feed__face"
+                      :to="{ name: 'person', params: { userId: person.userId } }"
+                      :aria-label="person.displayName"
+                      :title="person.displayName"
+                    >
+                      <UserAvatar
+                        :name="person.displayName"
+                        :user-id="person.userId"
+                        :avatar-url="person.avatarUrl"
+                        :size="32"
+                      />
+                    </RouterLink>
+                  </span>
+                  <span class="feed__count hg-num" data-tst-id="feed-crowd">{{ crowd(item) }}</span>
+                </span>
+
+                <span class="feed__action">
+                  <template v-if="item.myStanding === 'CREATOR'">
+                    <span class="hg-badge">You organise</span>
+                    <RouterLink
+                      class="hg-btn hg-btn--quiet feed__open"
+                      :to="{ name: 'plan', params: { eventId: item.id } }"
+                    >
+                      <span>Open</span>
+                    </RouterLink>
+                  </template>
+
+                  <template v-else-if="item.myStanding === 'ACCEPTED' || item.myStanding === 'PENDING'">
+                    <span v-if="item.myStanding === 'ACCEPTED'" class="hg-badge hg-badge--success">You are coming</span>
+                    <span v-else class="hg-badge hg-badge--warning">You are invited</span>
+                    <RouterLink
+                      class="hg-btn hg-btn--quiet feed__open"
+                      :to="{ name: 'plan', params: { eventId: item.id } }"
+                      data-tst-id="feed-open"
+                    >
+                      <span>Open</span>
+                    </RouterLink>
+                  </template>
+
+                  <template v-else-if="item.myStanding === 'REQUESTED'">
+                    <span class="hg-badge hg-badge--warning" data-tst-id="feed-requested">Request sent</span>
+                    <button
+                      class="hg-btn hg-btn--quiet"
+                      :class="{ 'is-loading': joining === item.id }"
+                      type="button"
+                      :disabled="joining === item.id"
+                      data-tst-id="feed-take-back"
+                      @click="takeBack(item)"
+                    >
+                      <span>Take back</span>
+                    </button>
+                  </template>
+
+                  <span v-else-if="item.myStanding === 'REMOVED'" class="hg-badge hg-badge--danger">
+                    Not available to you
+                  </span>
+
+                  <span v-else-if="item.full" class="hg-btn hg-btn--quiet is-disabled feed__full" aria-disabled="true">
+                    Full
+                  </span>
+
+                  <button
+                    v-else
+                    class="hg-btn hg-btn--primary"
+                    :class="{ 'is-loading': joining === item.id }"
+                    type="button"
+                    :disabled="joining === item.id"
+                    data-tst-id="feed-join"
+                    @click="join(item)"
+                  >
+                    <span>{{ item.myStanding === 'DECLINED' ? 'Ask again' : 'Ask to join' }}</span>
+                  </button>
+                </span>
+              </div>
+            </article>
+          </div>
+
+          <div v-if="hasMore" class="feed__more">
+            <button
+              class="hg-btn hg-btn--quiet"
+              :class="{ 'is-loading': loadingMore }"
+              type="button"
+              :disabled="loadingMore"
+              data-tst-id="feed-more"
+              @click="load(true)"
+            >
+              <span>Show older</span>
+            </button>
+          </div>
+        </template>
       </div>
 
-      <div v-if="hasMore" class="feed__more">
-        <button
-          class="hg-btn hg-btn--quiet"
-          :class="{ 'is-loading': loadingMore }"
-          type="button"
-          :disabled="loadingMore"
-          data-tst-id="feed-more"
-          @click="load(true)"
-        >
-          <span>Show older</span>
-        </button>
-      </div>
-    </template>
+      <!-- ---------------------------------------------------------- the rail -->
+      <aside v-if="railShown" class="feed__rail" aria-label="Your reliability and calendar" data-tst-id="feed-rail">
+        <section class="hg-card feed__reliability" data-tst-id="feed-reliability">
+          <h2 class="hg-card__title">Your reliability</h2>
+          <template v-if="myReliability !== null">
+            <template v-if="myReliability.score !== null">
+              <div><ReliabilityBadge :score="myReliability.score" /></div>
+              <p class="feed__reliability-text hg-num">
+                Kept {{ myReliability.kept }} of {{ myReliability.kept + myReliability.broken }} promises.
+              </p>
+            </template>
+            <p v-else class="feed__reliability-text">Come to three plans and your rating appears here.</p>
+          </template>
+          <span v-else class="hg-skel hg-skel--line"></span>
+        </section>
+
+        <CalendarPanel compact />
+      </aside>
+    </div>
   </div>
 </template>
 
@@ -381,6 +444,52 @@ function canOpen(item: FeedItem): boolean {
   gap: var(--s-5);
 }
 
+/* ---- the feed and, with room, the rail beside it (see RAIL_FROM in the script) ---- */
+.feed__main {
+  min-width: 0;
+}
+
+.feed--rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--size-rail);
+  gap: var(--s-6);
+  align-items: start;
+}
+
+/* Beside the rail two cards still stand in a row, a little narrower. */
+.feed--rail .feed__grid {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+/* Stays in sight while the feed scrolls. With a day chosen and the form open it is taller than
+   the window, so it scrolls by itself: a sticky block taller than the window would keep its lower
+   part out of reach. The padding keeps focus outlines unclipped. */
+.feed__rail {
+  position: sticky;
+  top: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+  max-height: calc(100vh - var(--s-6) * 2);
+  max-height: calc(100dvh - var(--s-6) * 2);
+  margin: calc(var(--s-1) * -1);
+  padding: var(--s-1);
+  overflow-y: auto;
+}
+
+.feed__reliability {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.feed__reliability-text {
+  color: var(--c-ink-soft);
+  font: var(--t-small);
+}
+
 .feed__item {
   display: flex;
   flex-direction: column;
@@ -388,9 +497,9 @@ function canOpen(item: FeedItem): boolean {
   min-width: 0;
 }
 
-.feed__photo,
-.feed__photo:hover {
-  color: var(--c-ink);
+/* The inviter takes the room on the shade; the badge keeps its own width beside the name. */
+.feed__shade {
+  justify-content: space-between;
 }
 
 .feed__inviter-text {
@@ -398,13 +507,19 @@ function canOpen(item: FeedItem): boolean {
   overflow-wrap: anywhere;
 }
 
+/* A link on the shade of a picture: it keeps the light colour of the shade, hovered or not. */
 .feed__inviter,
 .feed__inviter:hover {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  color: var(--c-ink);
-  font: var(--t-small);
+  min-width: 0;
+  color: var(--c-on-accent);
+}
+
+.feed__place {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .feed__title-link,
