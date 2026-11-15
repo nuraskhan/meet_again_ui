@@ -8,6 +8,14 @@ plan. This repository is what people see in the browser; the server lives in
 
 Try it: https://meet-again-ui-112b5408b3d1.herokuapp.com/
 
+## Watch the demo
+
+[![Watch the Hangelo demo on YouTube](https://img.youtube.com/vi/LBUlGUmj4EQ/hqdefault.jpg)](https://www.youtube.com/watch?v=LBUlGUmj4EQ)
+
+▶ [Watch the walk-through on YouTube](https://www.youtube.com/watch?v=LBUlGUmj4EQ). The same video plays
+right on the [welcome page](https://meet-again-ui-112b5408b3d1.herokuapp.com/), and "Try demo" there
+opens the application as Steve Jobs or Steve Wozniak with no sign-up.
+
 ```mermaid
 flowchart LR
     Browser --> UI[Web app :19000] --> Server[Server :29000]

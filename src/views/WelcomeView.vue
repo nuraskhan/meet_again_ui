@@ -5,8 +5,10 @@
 
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
-import { ArrowDown, ArrowUpRight, Check, Clock, Coffee, Heart, MapPin, Mountain, Plane, Play, Star, Utensils, Wallet } from 'lucide-vue-next'
+import { ArrowDown, ArrowUpRight, Check, Clock, Coffee, Heart, MapPin, Mountain, Plane, Star, Utensils, Wallet } from 'lucide-vue-next'
 import HangeloLogo from '@/components/HangeloLogo.vue'
+import DemoMenu from '@/components/DemoMenu.vue'
+import DemoVideo from '@/components/DemoVideo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { FREE_FEATURES, PLUS_FEATURES, PLUS_PRICE_MONTH, PLUS_PRICE_YEAR } from '@/lib/plus'
 
@@ -181,14 +183,9 @@ const YEAR: number = new Date().getFullYear()
           <button class="hg-btn hg-btn--quiet" type="button" data-tst-id="welcome-pricing-link" @click="showPricing">
             Pricing
           </button>
-          <RouterLink
-            class="hg-btn hg-btn--outline"
-            :to="{ name: 'demo-login', params: { who: 'steve-jobs' } }"
-            data-tst-id="welcome-demo"
-          >
-            <Play class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-            Try demo
-          </RouterLink>
+          <!-- Meant to be noticed: the accent and a slow pulse. It opens a choice of two ready
+               accounts. -->
+          <DemoMenu data-tst-id="welcome-demo" />
         </nav>
 
         <span class="app-grow"></span>
@@ -282,6 +279,17 @@ const YEAR: number = new Date().getFullYear()
             How it works
             <ArrowDown class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
           </button>
+        </section>
+
+        <!-- ------------------------------------------------------------ the video -->
+        <!-- The recorded walk-through. Nothing is loaded from YouTube until someone presses play. -->
+        <section class="welcome__video welcome__reveal" aria-labelledby="welcome-video">
+          <h2 id="welcome-video" class="welcome__video-title">See Hangelo in action</h2>
+          <DemoVideo video-id="LBUlGUmj4EQ" title="Hangelo: a walk-through of the product" />
+          <div class="welcome__video-try">
+            <span>Rather try it yourself?</span>
+            <DemoMenu align="center" />
+          </div>
         </section>
 
         <!-- ------------------------------------------------------------ how it works -->
@@ -1111,5 +1119,32 @@ const YEAR: number = new Date().getFullYear()
   .welcome__plans {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---------------------------------------------------------------- the video */
+
+.welcome__video {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 860px;
+  margin: 0 auto calc(var(--s-8) * 1.5);
+  text-align: center;
+}
+
+.welcome__video-title {
+  margin-bottom: var(--s-5);
+  font: var(--t-title-1);
+  letter-spacing: -0.015em;
+}
+
+.welcome__video-try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+  color: var(--c-ink-soft);
 }
 </style>
