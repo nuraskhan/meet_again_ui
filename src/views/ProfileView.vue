@@ -7,6 +7,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api } from '@/api'
 import { serverFileUrl } from '@/api/http'
 import type { Photo, Prompt, Reliability } from '@/api/types'
+import PlusDialog from '@/components/PlusDialog.vue'
 import ReliabilityBadge from '@/components/ReliabilityBadge.vue'
 import { LogOut, Plus, Star, Trash2, X } from 'lucide-vue-next'
 import { auth } from '@/stores/auth'
@@ -31,7 +32,24 @@ const PROMPT_QUESTIONS: string[] = [
   'My go-to order',
 ]
 
-const PRIVILEGE_NAME: Record<string, string> = { STANDARD: 'Standard', PRO: 'Pro', MAX: 'Max' }
+const PRIVILEGE_NAME: Record<string, string> = { STANDARD: 'Free', PLUS: 'Plus', PRO: 'Pro', MAX: 'Max' }
+
+/** The dialog "Upgrade to Plus". */
+const plusOpen = ref<boolean>(false)
+const leavingPlus = ref<boolean>(false)
+
+/** Back to the free plan. (A demonstration: nothing was charged, nothing is refunded.) */
+async function leavePlus(): Promise<void> {
+  leavingPlus.value = true
+  try {
+    auth.state.profile = await api.cancelPlus()
+    toastOk('You are back on the free plan')
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    leavingPlus.value = false
+  }
+}
 
 // ------------------------------------------------------------------ the text part
 
@@ -591,6 +609,31 @@ function emptyToNull(value: string): string | null {
             </span>
             <span class="hg-soft hg-num">Up to {{ maxPhotos }} photos</span>
           </p>
+          <p class="profile__account-line">
+            <button
+              v-if="auth.state.profile?.privilege === 'STANDARD'"
+              class="hg-btn hg-btn--outline hg-btn--sm"
+              type="button"
+              data-tst-id="profile-plus-upgrade"
+              @click="plusOpen = true"
+            >
+              Upgrade to Plus
+            </button>
+            <button
+              v-else-if="auth.state.profile?.privilege === 'PLUS'"
+              class="hg-btn hg-btn--quiet hg-btn--sm"
+              :class="{ 'is-loading': leavingPlus }"
+              type="button"
+              :disabled="leavingPlus"
+              data-tst-id="profile-plus-cancel"
+              @click="leavePlus"
+            >
+              <span>Back to the free plan</span>
+            </button>
+          </p>
+          <Teleport to="body">
+            <PlusDialog v-if="plusOpen" @close="plusOpen = false" />
+          </Teleport>
 
           <!-- The user's own reliability, and what it is counted from: a number nobody can explain
                would only feel like a verdict. -->

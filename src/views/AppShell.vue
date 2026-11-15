@@ -6,11 +6,12 @@
 //   phone   - a bar at the top (logo, bell, account) and a tab bar at the bottom.
 
 import type { Component } from 'vue'
-import { ref, watch } from 'vue'
-import { BarChart3, Bell, CalendarDays, Compass, ListChecks, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Users } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { BarChart3, Bell, CalendarDays, Compass, ListChecks, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Sparkles, Users } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import { api } from '@/api'
 import HangeloLogo from '@/components/HangeloLogo.vue'
+import PlusDialog from '@/components/PlusDialog.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue'
@@ -19,6 +20,12 @@ import { chats } from '@/stores/chats'
 import { notifications } from '@/stores/notifications'
 
 const route = useRoute()
+
+// Hangelo Plus. Someone on the free plan is offered the upgrade beside their name; someone on
+// Plus carries the badge there instead. (Nothing is limited on the free plan: Plus only adds.)
+const plusOpen = ref<boolean>(false)
+const onFreePlan = computed<boolean>(() => auth.state.profile?.privilege === 'STANDARD')
+const onPlus = computed<boolean>(() => auth.state.profile?.privilege === 'PLUS')
 
 // The analytics are for the administrators of the site: the link is shown only to them. The
 // server decides who that is, and is asked whenever somebody signs in.
@@ -194,6 +201,19 @@ function bellName(): string {
       <!-- Wide screens have no top bar: the switch sits at the foot of the sidebar. -->
       <span class="shell__theme"><ThemeToggle /></span>
 
+      <!-- The account's menu: the way to Plus stands right above the name. -->
+      <button
+        v-if="onFreePlan"
+        class="hg-btn hg-btn--outline hg-btn--block shell__upgrade"
+        type="button"
+        title="Upgrade to Plus"
+        data-tst-id="plus-upgrade"
+        @click="plusOpen = true"
+      >
+        <Sparkles class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <span class="app-wide-only">Upgrade to Plus</span>
+      </button>
+
       <RouterLink class="hg-account" :to="{ name: 'profile' }" title="My profile" data-tst-id="nav-profile">
         <UserAvatar
           :name="auth.state.profile?.displayName ?? '?'"
@@ -201,7 +221,10 @@ function bellName(): string {
           :size="32"
         />
         <span class="shell__account app-wide-only">
-          <b class="shell__name">{{ auth.state.profile?.displayName ?? '' }}</b>
+          <b class="shell__name">
+            {{ auth.state.profile?.displayName ?? '' }}
+            <span v-if="onPlus" class="hg-badge shell__plus" data-tst-id="plus-badge">Plus</span>
+          </b>
           <span class="shell__hint">View profile</span>
         </span>
       </RouterLink>
@@ -224,6 +247,18 @@ function bellName(): string {
         <Bell class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
         <span v-if="notifications.state.unread > 0" class="hg-count" aria-hidden="true">{{ unreadLabel() }}</span>
       </RouterLink>
+
+      <span v-if="onPlus" class="hg-badge shell__plus" data-tst-id="plus-badge-phone">Plus</span>
+      <button
+        v-else-if="onFreePlan"
+        class="hg-iconbtn"
+        type="button"
+        aria-label="Upgrade to Plus"
+        data-tst-id="plus-upgrade-phone"
+        @click="plusOpen = true"
+      >
+        <Sparkles class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+      </button>
 
       <RouterLink class="shell__me" :to="{ name: 'profile' }" aria-label="My profile" data-tst-id="nav-profile-phone">
         <UserAvatar
@@ -295,6 +330,10 @@ function bellName(): string {
         <span>Chats</span>
       </RouterLink>
     </nav>
+
+    <Teleport to="body">
+      <PlusDialog v-if="plusOpen" @close="plusOpen = false" />
+    </Teleport>
   </div>
 </template>
 
@@ -382,5 +421,18 @@ function bellName(): string {
 
 .hg-navitem[aria-current='page'] {
   color: var(--c-accent-text);
+}
+
+/* The badge of the Plus plan: the accent on its soft tint - the one place a plan is shown. */
+.shell__plus {
+  background: var(--c-accent-soft);
+  color: var(--c-accent-text);
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* The upgrade button takes the place right above the account. */
+.shell__upgrade + .hg-account {
+  margin-top: 0;
 }
 </style>

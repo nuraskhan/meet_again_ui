@@ -54,6 +54,10 @@ export const api = {
 
   // ---------------------------------------------------------------- profile
   myProfile: () => get<MyProfile>('/profile/me'),
+  /** "Start Plus": moves the user to the Plus plan. A demonstration - no payment is taken. */
+  startPlus: () => post<MyProfile>('/profile/plus/start'),
+  /** Back to the free plan. */
+  cancelPlus: () => post<MyProfile>('/profile/plus/cancel'),
   updateMyProfile: (request: UpdateProfileRequest) => post<MyProfile>('/profile/me', request),
   /** Adds a photo after the existing ones. The server accepts JPEG and PNG up to 6 MB. */
   uploadPhoto: (file: File) => upload<MyProfile>('/profile/me/photo', file),

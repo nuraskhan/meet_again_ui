@@ -372,7 +372,7 @@ async function loadComing(): Promise<void> {
           </template>
 
           <span v-if="person.privilege !== 'STANDARD'" class="hg-badge" data-tst-id="person-privilege">
-            {{ person.privilege === 'MAX' ? 'Max' : 'Pro' }}
+            {{ person.privilege === 'MAX' ? 'Max' : person.privilege === 'PRO' ? 'Pro' : 'Plus' }}
           </span>
         </div>
 

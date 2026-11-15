@@ -7,7 +7,8 @@ export interface AuthResponse {
 }
 
 /** The privilege level of a person: the base of the future subscription plans. Set by the server. */
-export type Privilege = 'STANDARD' | 'PRO' | 'MAX'
+/** STANDARD is the free plan; PLUS is Hangelo Plus, which a person takes themselves. */
+export type Privilege = 'STANDARD' | 'PLUS' | 'PRO' | 'MAX'
 
 export interface Photo {
   /** What remove / make-main take; meaningful only to the owner. */

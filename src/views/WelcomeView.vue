@@ -5,21 +5,10 @@
 
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
-import {
-  ArrowDown,
-  ArrowUpRight,
-  Clock,
-  Coffee,
-  Heart,
-  MapPin,
-  Mountain,
-  Plane,
-  Star,
-  Utensils,
-  Wallet,
-} from 'lucide-vue-next'
+import { ArrowDown, ArrowUpRight, Check, Clock, Coffee, Heart, MapPin, Mountain, Plane, Star, Utensils, Wallet } from 'lucide-vue-next'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import { FREE_FEATURES, PLUS_FEATURES, PLUS_PRICE_MONTH, PLUS_PRICE_YEAR } from '@/lib/plus'
 
 // The words of this page follow the product research (the Business Cup document): its tagline, its
 // value proposition, the four things a group has to reconcile, and the two figures it quotes.
@@ -401,6 +390,48 @@ const YEAR: number = new Date().getFullYear()
             <p class="hg-soft">
               Tell friends in another city that you are visiting, and make a plan to meet while you are there.
             </p>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ pricing -->
+        <!-- The same figures and the same list as the "Upgrade to Plus" dialog: both read lib/plus.ts. -->
+        <section class="welcome__pricing welcome__reveal" aria-labelledby="welcome-pricing">
+          <h2 id="welcome-pricing" class="welcome__step-title">Free to plan. Plus when you plan a lot.</h2>
+          <div class="welcome__plans">
+            <article class="welcome__plan" data-tst-id="welcome-plan-free">
+              <h3 class="welcome__plan-name">Free</h3>
+              <p class="welcome__plan-price hg-num"><b>$0</b></p>
+              <ul class="welcome__plan-list">
+                <li v-for="feature in FREE_FEATURES" :key="feature">
+                  <Check class="hg-icon welcome__plan-check" :stroke-width="2" aria-hidden="true" />
+                  <span>{{ feature }}</span>
+                </li>
+              </ul>
+              <RouterLink class="hg-btn hg-btn--outline hg-btn--block" :to="{ name: 'register' }">
+                Create account
+              </RouterLink>
+            </article>
+
+            <article class="welcome__plan welcome__plan--plus" data-tst-id="welcome-plan-plus">
+              <h3 class="welcome__plan-name">Hangelo Plus</h3>
+              <p class="welcome__plan-price hg-num">
+                <b>{{ PLUS_PRICE_MONTH }}</b>/month or <b>{{ PLUS_PRICE_YEAR }}</b>/year
+              </p>
+              <ul class="welcome__plan-list">
+                <li>
+                  <Check class="hg-icon welcome__plan-check" :stroke-width="2" aria-hidden="true" />
+                  <span>Everything in Free</span>
+                </li>
+                <li v-for="feature in PLUS_FEATURES" :key="feature">
+                  <Check class="hg-icon welcome__plan-check" :stroke-width="2" aria-hidden="true" />
+                  <span>{{ feature }}</span>
+                </li>
+              </ul>
+              <RouterLink class="hg-btn hg-btn--primary hg-btn--block" :to="{ name: 'register' }">
+                Start with Plus
+              </RouterLink>
+              <p class="welcome__plan-note">Demo — no real payment</p>
+            </article>
           </div>
         </section>
 
@@ -954,6 +985,83 @@ const YEAR: number = new Date().getFullYear()
 @media (max-width: 520px) {
   [data-tst-id='welcome-register'] {
     display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- pricing */
+
+.welcome__pricing {
+  max-width: 760px;
+  margin: calc(var(--s-8) * 1.5) auto 0;
+  text-align: center;
+}
+
+.welcome__plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-5);
+  margin-top: var(--s-6);
+  text-align: left;
+}
+
+.welcome__plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-l);
+  background: var(--c-surface);
+}
+
+/* The plan that is offered: marked by its border and a tint, not by size. */
+.welcome__plan--plus {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.welcome__plan-name {
+  font: var(--t-title-2);
+}
+
+.welcome__plan-price {
+  margin-top: calc(var(--s-3) * -1);
+  color: var(--c-ink-soft);
+}
+
+.welcome__plan-price b {
+  color: var(--c-ink);
+  font: var(--t-title-2);
+}
+
+.welcome__plan-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.welcome__plan-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+
+.welcome__plan-check {
+  margin-top: 1px;
+  color: var(--c-success);
+}
+
+.welcome__plan-note {
+  margin-top: calc(var(--s-2) * -1);
+  color: var(--c-ink-soft);
+  font: var(--t-caption);
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .welcome__plans {
+    grid-template-columns: 1fr;
   }
 }
 </style>
