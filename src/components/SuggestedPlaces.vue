@@ -53,6 +53,9 @@ async function ask(): Promise<void> {
   }
 }
 
+// The guide of the plan page ("What's next") presses the same button from outside.
+defineExpose({ ask })
+
 /** Takes the position of the device (the browser asks the person) and suggests from there. */
 async function askFromHere(): Promise<void> {
   const position: { latitude: number; longitude: number } | null = await whereAmI()

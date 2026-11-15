@@ -4,7 +4,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarDays, Clock, Globe, MapPin, Plus } from 'lucide-vue-next'
+import { ArrowRight, CalendarDays, Clock, Globe, MapPin, Plus } from 'lucide-vue-next'
 import { onSignal } from '@/stores/signal'
 import { api } from '@/api'
 import type { EventDto, Invitation, Invitee } from '@/api/types'
@@ -13,10 +13,15 @@ import EventSummary from '@/components/EventSummary.vue'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { EVENT_TYPE_LOOK, proposedTimesSummary } from '@/lib/format'
+import { nextStep, planSteps, wasLinkSent } from '@/lib/planSteps'
+import { useUserStory } from '@/lib/userStory'
 import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
 const router = useRouter()
+
+// Under /user-story the page carries the guide through a plan; on its general address it does not.
+const { inStory, storyTo } = useUserStory()
 
 /** How many cards the skeleton shows while the lists are on their way. */
 const SKELETONS: number = 4
@@ -71,7 +76,7 @@ async function answer(invitation: Invitation, accept: boolean): Promise<void> {
       await api.acceptInvitation(invitation.invitationId)
       toastOk('You are coming. Now say where you are coming from.')
       // The plan page asks for the guest's location and travel distance.
-      await router.push({ name: 'plan', params: { eventId: invitation.event.id } })
+      await router.push(storyTo('plan', { eventId: invitation.event.id }))
       return
     } else {
       await api.declineInvitation(invitation.invitationId)
@@ -99,6 +104,13 @@ function crowd(event: EventDto): string {
   return going + ' of ' + event.invitees.length + ' coming'
 }
 
+/** What this person should do in the plan now ("Invite people"); null = nothing is waiting for them. */
+function next(event: EventDto): string | null {
+  const step = nextStep(planSteps(event, auth.state.userId, wasLinkSent(event.id)))
+  // Waiting for the organiser is not this person's move: nothing to point at.
+  return step === null || step.waiting ? null : step.title
+}
+
 /** What happened to the plan or what the current user answered; null = nothing worth a badge. */
 function standing(event: EventDto): { text: string; kind: string } | null {
   if (event.status === 'CANCELLED') {
@@ -120,7 +132,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
   <div class="app-col">
     <div class="app-head">
       <h1 class="app-head__title">Plans</h1>
-      <RouterLink class="hg-btn hg-btn--neutral plans__new" :to="{ name: 'plan-new' }" data-tst-id="plans-new">
+      <RouterLink class="hg-btn hg-btn--neutral plans__new" :to="storyTo('plan-new')" data-tst-id="plans-new">
         <Plus class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
         <span>New plan</span>
       </RouterLink>
@@ -165,7 +177,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               </p>
               <RouterLink
                 class="plans__invitation-link"
-                :to="{ name: 'plan', params: { eventId: invitation.event.id } }"
+                :to="storyTo('plan', { eventId: invitation.event.id })"
               >
                 <!-- The default picture of the activity: venues have no photos of their own yet. -->
                 <span class="plans__thumb">
@@ -214,7 +226,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
             v-for="event in upcoming"
             :key="event.id"
             class="hg-card hg-card--link plans__card"
-            :to="{ name: 'plan', params: { eventId: event.id } }"
+            :to="storyTo('plan', { eventId: event.id })"
             data-tst-id="plan-card"
           >
             <div class="plans__card-top">
@@ -267,6 +279,12 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               </span>
               <span class="plans__count hg-num">{{ crowd(event) }}</span>
             </div>
+
+            <!-- The user story (/user-story) only: the one thing waiting for this person in the plan. -->
+            <span v-if="inStory && next(event) !== null" class="plans__next" data-tst-id="plan-card-next">
+              <ArrowRight class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Next: {{ next(event) }}</span>
+            </span>
           </RouterLink>
         </div>
       </section>
@@ -281,7 +299,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
               : 'Invite your friends to the first one. It takes a minute.'
           }}
         </p>
-        <RouterLink class="hg-btn hg-btn--primary plans__start" :to="{ name: 'plan-new' }">
+        <RouterLink class="hg-btn hg-btn--primary plans__start" :to="storyTo('plan-new')">
           <span>New plan</span>
         </RouterLink>
       </div>
@@ -310,7 +328,7 @@ function standing(event: EventDto): { text: string; kind: string } | null {
             v-for="event in closed"
             :key="event.id"
             class="hg-card hg-card--link hg-card--quiet plans__card plans__card--quiet"
-            :to="{ name: 'plan', params: { eventId: event.id } }"
+            :to="storyTo('plan', { eventId: event.id })"
             data-tst-id="plan-card-closed"
           >
             <div class="plans__card-top">
@@ -366,6 +384,21 @@ function standing(event: EventDto): { text: string; kind: string } | null {
 </template>
 
 <style scoped>
+/* "Next: invite people" at the foot of a card: the accent says it is this person's move. */
+.plans__next {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--c-accent-text);
+  font: var(--t-body-strong);
+}
+
+.plans__next .hg-icon {
+  flex: none;
+  width: var(--s-4);
+  height: var(--s-4);
+}
+
 /* main.css colours every link, and every hovered link, as a text link: the links that are buttons
  * or cards keep their own colours. */
 .plans__new:hover {
