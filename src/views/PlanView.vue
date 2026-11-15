@@ -548,6 +548,17 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           <ProposedTimes :times="event.proposedTimes" />
         </section>
 
+        <!-- Everyone coming says where they are and how far they travel; places are suggested from it.
+             It stands ABOVE the places: where a person is decides which places are near, so it is
+             asked before a place is chosen or suggested, not after. -->
+        <section v-if="canSetPreference" data-tst-id="plan-preference">
+          <h2 class="plan__title">Your location and distance</h2>
+          <p v-if="event.myPreference === null" class="plan__todo" data-tst-id="plan-preference-todo">
+            Tell the others where you are coming from and how far you can go.
+          </p>
+          <PreferenceForm :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
+        </section>
+
         <!-- The venue. A plan that is closed and never had one says nothing about it. -->
         <section v-if="event.place !== null || active" data-tst-id="plan-place">
           <h2 class="plan__title">Where</h2>
@@ -673,14 +684,6 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
           @choose="choosePlace"
         />
 
-        <!-- Everyone coming says where they are and how far they travel; places are suggested from it. -->
-        <section v-if="canSetPreference" data-tst-id="plan-preference">
-          <h2 class="plan__title">Your location and distance</h2>
-          <p v-if="event.myPreference === null" class="plan__todo" data-tst-id="plan-preference-todo">
-            Tell the others where you are coming from and how far you can go.
-          </p>
-          <PreferenceForm :event-id="event.id" :current="event.myPreference" @saved="event = $event" />
-        </section>
       </div>
 
       <!-- ============================================================ the rail -->

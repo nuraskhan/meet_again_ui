@@ -7,7 +7,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import type { EventTypeCode, EventTypeInfo, EventVisibility, Friend, FriendAvailability } from '@/api/types'
-import { Clock, MapPin, Plus, Wallet, X } from 'lucide-vue-next'
+import { Check, Clock, LocateFixed, MapPin, Plus, Wallet, X } from 'lucide-vue-next'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { addDays, availabilityPhrase, covers } from '@/lib/dates'
@@ -205,6 +205,82 @@ function toggle(userId: number): void {
   }
 }
 
+// ------------------------------------------------------------------ where the person is
+//
+// Asked here, while the plan is being written, and saved with it: places can then be suggested
+// and chosen the moment the plan exists, measured from where its organiser is. Before, the
+// location was a separate step on the plan page that came after the places it was needed for.
+
+/** The position of the device, once the person shared it. */
+const position = ref<{ latitude: number; longitude: number } | null>(null)
+/** The place in the person's own words: instead of the position, or beside it. */
+const locationText = ref<string>('')
+const locating = ref<boolean>(false)
+/** The device gave no position: the person can still type the place. */
+const locateFailed = ref<boolean>(false)
+
+/** Asks the device where the person is. The browser asks the person first. */
+function locate(): void {
+  if (!('geolocation' in navigator)) {
+    locateFailed.value = true
+    return
+  }
+  locating.value = true
+  locateFailed.value = false
+  navigator.geolocation.getCurrentPosition(
+    (found) => {
+      locating.value = false
+      position.value = { latitude: found.coords.latitude, longitude: found.coords.longitude }
+    },
+    () => {
+      locating.value = false
+      locateFailed.value = true
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+  )
+}
+
+// A person who has already allowed this site to see their location is not asked again: the
+// position is taken at once. Anyone else is asked only when they press the button.
+onMounted(() => {
+  if (!('permissions' in navigator)) {
+    return
+  }
+  navigator.permissions
+    .query({ name: 'geolocation' })
+    .then((status) => {
+      if (status.state === 'granted' && position.value === null) {
+        locate()
+      }
+    })
+    .catch(() => {
+      // The browser cannot say: the button is there.
+    })
+})
+
+/**
+ * Saves where the organiser is, for the plan just created. The radius is the farthest the
+ * invitation itself speaks of. A failure here does not undo the plan: the location can be given
+ * on the plan page.
+ */
+async function saveLocation(eventId: number): Promise<void> {
+  const text: string = locationText.value.trim()
+  if (position.value === null && text === '') {
+    return
+  }
+  try {
+    await api.savePreference(eventId, {
+      latitude: position.value?.latitude ?? null,
+      longitude: position.value?.longitude ?? null,
+      locationText: text === '' ? null : text,
+      travelRadiusMi: Math.min(500, Math.max(1, form.distanceMaxMi)),
+    })
+  } catch (caught) {
+    // The plan exists; only its location was not kept. Say why, and go on to the plan.
+    toastError(caught)
+  }
+}
+
 async function send(): Promise<void> {
   if (chosen.value === null) {
     return
@@ -251,6 +327,7 @@ async function send(): Promise<void> {
             ? 'Invitation sent'
             : 'Invitations sent',
     )
+    await saveLocation(event.id)
     await router.replace({ name: 'plan', params: { eventId: event.id } })
   } catch (caught) {
     error.value = errorText(caught)
@@ -445,6 +522,58 @@ async function send(): Promise<void> {
             </div>
           </section>
 
+          <!-- -------------------------------------------------------- where you are -->
+          <section data-tst-id="plan-new-location">
+            <h2 class="new__title new__title--tight">Where you are</h2>
+            <p class="new__hint new__hint--above">
+              Places are suggested near you, and each shows how far it is. Others see only what you type, and
+              that a location was shared - never the point itself.
+            </p>
+
+            <div class="new__where">
+              <button
+                class="hg-btn"
+                :class="[position === null ? 'hg-btn--neutral' : 'hg-btn--outline', { 'is-loading': locating }]"
+                type="button"
+                :disabled="locating"
+                data-tst-id="plan-new-locate"
+                @click="locate"
+              >
+                <Check v-if="position !== null" class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <LocateFixed v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                <span>{{ position === null ? 'Use my location' : 'Location shared' }}</span>
+              </button>
+              <button
+                v-if="position !== null"
+                class="hg-btn hg-btn--quiet"
+                type="button"
+                data-tst-id="plan-new-unlocate"
+                @click="position = null"
+              >
+                Remove
+              </button>
+            </div>
+            <p v-if="locateFailed" class="hg-field__msg" data-tst-id="plan-new-locate-failed">
+              Your browser did not give your location. You can type the place below instead.
+            </p>
+
+            <div class="hg-field new__where-text">
+              <label class="hg-field__label" for="plan-new-place">Or type where you are coming from</label>
+              <input
+                id="plan-new-place"
+                v-model="locationText"
+                class="hg-input"
+                type="text"
+                maxlength="200"
+                placeholder="City, neighbourhood or address"
+                data-tst-id="plan-new-place"
+              />
+              <p class="hg-field__msg">
+                A typed place is shown to the others, but distances need the shared location.
+              </p>
+            </div>
+          </section>
+
           <!-- -------------------------------------------------------- who -->
           <section>
             <h2 class="new__title">Who</h2>
@@ -610,6 +739,17 @@ async function send(): Promise<void> {
 .new__hint {
   font: var(--t-small);
   color: var(--c-ink-soft);
+}
+
+.new__where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.new__where-text {
+  margin-top: var(--s-3);
 }
 
 .new__hint--above {
