@@ -40,7 +40,7 @@ const props = withDefaults(
   { compact: false },
 )
 
-const WEEKDAYS: string[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const WEEKDAYS: string[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const KINDS: AvailabilityKind[] = ['BUSY', 'FREE', 'TRIP']
 const KIND_LABEL: Record<AvailabilityKind, string> = { BUSY: 'Busy', FREE: 'Free', TRIP: 'Trip' }
 

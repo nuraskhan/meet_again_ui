@@ -6,19 +6,10 @@
 //   phone   - a bar at the top (logo, bell, account) and a tab bar at the bottom.
 
 import type { Component } from 'vue'
-import { ref } from 'vue'
-import {
-  Bell,
-  CalendarDays,
-  Compass,
-  ListChecks,
-  MessageCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Users,
-} from 'lucide-vue-next'
+import { ref, watch } from 'vue'
+import { BarChart3, Bell, CalendarDays, Compass, ListChecks, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Users } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
+import { api } from '@/api'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
@@ -28,6 +19,26 @@ import { chats } from '@/stores/chats'
 import { notifications } from '@/stores/notifications'
 
 const route = useRoute()
+
+// The analytics are for the administrators of the site: the link is shown only to them. The
+// server decides who that is, and is asked whenever somebody signs in.
+const isAdmin = ref<boolean>(false)
+
+watch(
+  () => auth.state.token,
+  async (token) => {
+    isAdmin.value = false
+    if (token === null) {
+      return
+    }
+    try {
+      isAdmin.value = (await api.adminAccess()).admin
+    } catch {
+      // Not knowing means no link; the page itself still answers for those who may see it.
+    }
+  },
+  { immediate: true },
+)
 
 // The sidebar can be folded to its icons, to give the page the room. The choice is kept in this
 // browser. (On a medium screen it is always folded, and on a phone there is no sidebar: there the
@@ -167,6 +178,18 @@ function bellName(): string {
           </span>
         </RouterLink>
       </nav>
+
+      <RouterLink
+        v-if="isAdmin"
+        class="hg-navitem shell__admin"
+        :to="{ name: 'analytics' }"
+        :aria-current="isCurrent('analytics') ? 'page' : undefined"
+        title="Analytics"
+        data-tst-id="nav-analytics"
+      >
+        <BarChart3 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        <span class="hg-navitem__label app-wide-only">Analytics</span>
+      </RouterLink>
 
       <!-- Wide screens have no top bar: the switch sits at the foot of the sidebar. -->
       <span class="shell__theme"><ThemeToggle /></span>

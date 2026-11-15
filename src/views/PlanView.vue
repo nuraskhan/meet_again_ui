@@ -26,6 +26,7 @@ import { onSignal } from '@/stores/signal'
 import EventPicture from '@/components/EventPicture.vue'
 import EventSummary from '@/components/EventSummary.vue'
 import PlacePicker from '@/components/PlacePicker.vue'
+import ChatView from '@/views/ChatView.vue'
 import PreferenceForm from '@/components/PreferenceForm.vue'
 import SuggestedPlaces from '@/components/SuggestedPlaces.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
@@ -551,7 +552,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
         <!-- Everyone coming says where they are and how far they travel; places are suggested from it.
              It stands ABOVE the places: where a person is decides which places are near, so it is
              asked before a place is chosen or suggested, not after. -->
-        <section v-if="canSetPreference" data-tst-id="plan-preference">
+        <section v-if="canSetPreference && isCreator" data-tst-id="plan-preference">
           <h2 class="plan__title">Your location and distance</h2>
           <p v-if="event.myPreference === null" class="plan__todo" data-tst-id="plan-preference-todo">
             Tell the others where you are coming from and how far you can go.
@@ -921,6 +922,15 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
                 : 'Nobody joined this plan.'
             }}
           </p>
+        </section>
+
+        <!-- The chat of the plan, right here: reading and writing without leaving the page.
+             The button at the top of the rail still opens it full size. -->
+        <section v-if="inChat" class="plan__chat-section" data-tst-id="plan-chat">
+          <h2 class="plan__rail-title plan__rail-title--tight">Chat</h2>
+          <div class="plan__chat">
+            <ChatView :key="event.chatId" :chat-id="event.chatId" embedded />
+          </div>
         </section>
 
         <!-- A guest who said yes can change their mind. -->
@@ -1299,6 +1309,16 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
 .plan__delete {
   padding-left: var(--s-2);
   padding-right: var(--s-2);
+}
+
+/* The chat in the rail: a box of a fixed height - the messages scroll inside it, the field
+   stays at its foot. (ChatView fills whatever box it is given.) */
+.plan__chat {
+  display: flex;
+  height: 440px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  overflow: hidden;
 }
 
 .plan__counts {

@@ -15,28 +15,28 @@ export const EVENT_TYPE_LOOK: Record<EventTypeCode, { label: string }> = {
   OTHER: { label: 'Something else' },
 }
 
-/** The currency sign shown after a price. The server stores prices as plain numbers. */
-const CURRENCY = '₸'
+/** The currency sign shown before a price: US dollars. The server stores prices as plain numbers. */
+const CURRENCY = '$'
 
 const numberFormat = new Intl.NumberFormat('en-US')
 
+/** 1500 -> "$1,500": the sign first and a comma for thousands, as dollars are written. */
 function money(value: number): string {
-  // 15000 -> "15 000": a thin space reads better than a comma next to the currency sign.
-  return numberFormat.format(value).replace(/,/g, ' ')
+  return CURRENCY + numberFormat.format(value)
 }
 
-/** "Free", "up to 5 000 ₸", "5 000 – 15 000 ₸". */
+/** "Free", "up to $40", "$20 – $60". */
 export function priceRange(min: number, max: number): string {
   if (max === 0) {
     return 'Free'
   }
   if (min === 0) {
-    return 'up to ' + money(max) + ' ' + CURRENCY
+    return 'up to ' + money(max)
   }
   if (min === max) {
-    return money(min) + ' ' + CURRENCY
+    return money(min)
   }
-  return money(min) + ' – ' + money(max) + ' ' + CURRENCY
+  return money(min) + ' – ' + money(max)
 }
 
 /** "within 5 mi", "5 – 10 mi". Distances are in miles everywhere. */
@@ -51,7 +51,7 @@ export function distanceRange(minMi: number, maxMi: number): string {
 }
 
 // The interface is in English, so dates are too - whatever the language of the browser.
-const LOCALE = 'en-GB'
+const LOCALE = 'en-US'
 
 const dateTimeFormat = new Intl.DateTimeFormat(LOCALE, {
   weekday: 'short',

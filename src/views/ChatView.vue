@@ -18,7 +18,17 @@ import { auth } from '@/stores/auth'
 import { chats as chatStore } from '@/stores/chats'
 import { toastError } from '@/stores/toast'
 
-const props = defineProps<{ chatId: number }>()
+const props = withDefaults(
+  defineProps<{
+    chatId: number
+    /**
+     * Shown inside another page (the rail of a plan) and not as a page of its own: no header -
+     * the page around it already says which plan this is - only the messages and the field.
+     */
+    embedded?: boolean
+  }>(),
+  { embedded: false },
+)
 
 /** The safety net under the signals, not the delivery: so it is slow. */
 const POLL_EVERY_MS = 30000
@@ -74,7 +84,7 @@ const avatarUrls = computed<Map<number, string | null>>(
 )
 
 // The interface is in English, so dates are too - whatever the language of the browser.
-const LOCALE = 'en-GB'
+const LOCALE = 'en-US'
 const timeFormat = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' })
 const dayFormat = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' })
 const dayYearFormat = new Intl.DateTimeFormat(LOCALE, {
@@ -303,7 +313,7 @@ function time(iso: string): string {
 
 <template>
   <div class="chat">
-    <header class="chat__head">
+    <header v-if="!embedded" class="chat__head">
       <RouterLink class="hg-iconbtn chat__back" :to="{ name: 'chats' }" aria-label="All chats">
         <ArrowLeft class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
       </RouterLink>

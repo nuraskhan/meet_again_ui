@@ -2,6 +2,7 @@
 
 import { get, post, upload } from './http'
 import type {
+  Analytics,
   AppNotification,
   Availability,
   FriendAvailability,
@@ -38,6 +39,14 @@ export const api = {
   register: (email: string, password: string, displayName: string) =>
     post<AuthResponse>('/auth/register', { email, password, displayName }),
   login: (email: string, password: string) => post<AuthResponse>('/auth/login', { email, password }),
+  /** Signs in as a demonstration account by its word: "steve-jobs" or "steve-wozniak". */
+  demoLogin: (who: string) => post<AuthResponse>('/auth/demo/' + encodeURIComponent(who)),
+  /** Tells the server a page was opened: its pattern, and a random id of this browser. */
+  visit: (visitorId: string, path: string) => post<void>('/public/visit', { visitorId, path }),
+  /** May the current user see the analytics. */
+  adminAccess: () => get<{ admin: boolean }>('/admin/access'),
+  /** The figures of visits for the last so many days; admins only (404 for anyone else). */
+  analytics: (days: number) => get<Analytics>('/admin/analytics?days=' + days),
   /** The link from the confirmation letter. Works without being logged in. */
   verifyEmail: (token: string) => post<void>('/auth/verify-email', { token }),
   /** "Send the confirmation letter again." The server allows it once a minute. */

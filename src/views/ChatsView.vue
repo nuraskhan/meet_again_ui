@@ -26,10 +26,10 @@ const loading = computed<boolean>(() => !chatStore.state.loaded)
 const openChatId = computed<number | null>(() => (route.name === 'chat' ? Number(route.params.chatId) : null))
 
 // The interface is in English, so dates are too - whatever the language of the browser.
-const dayFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-const timeFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
-const shortDayFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
-const yearFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+const dayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
+const timeFormat = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' })
+const shortDayFormat = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' })
+const yearFormat = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
 
 onMounted(load)
 

@@ -443,6 +443,33 @@ export interface AppNotification {
   read: boolean
 }
 
+/** The figures of /admin/analytica, for the last so many days. A day is a UTC day. */
+export interface Analytics {
+  days: number
+  /** Pages opened. */
+  visits: number
+  /** Different browsers that opened them. */
+  visitors: number
+  /** Of the visits, how many were by someone signed in. */
+  signedInVisits: number
+  /** Accounts there are in all. */
+  users: number
+  /** Accounts created in these days. */
+  newUsers: number
+  /** Plans created in these days. */
+  plans: number
+  /** Every day of the stretch, earliest first. */
+  byDay: AnalyticsDay[]
+  topPages: { path: string; visits: number; visitors: number }[]
+}
+
+export interface AnalyticsDay {
+  /** "2030-01-05" */
+  day: string
+  visits: number
+  visitors: number
+}
+
 /** What the signal "chat.message" carries. */
 export interface ChatMessageSignal {
   chatId: number

@@ -43,7 +43,7 @@ interface DayGroup {
 }
 
 // The interface is in English, so dates are too - whatever the language of the browser.
-const LOCALE = 'en-GB'
+const LOCALE = 'en-US'
 const timeFormat = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' })
 const dayFormat = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' })
 const dayYearFormat = new Intl.DateTimeFormat(LOCALE, {

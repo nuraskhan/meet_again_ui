@@ -13,7 +13,7 @@
 import type { AvailabilityKind } from '@/api/types'
 
 // The interface is in English, so dates are too - whatever the language of the browser.
-const LOCALE = 'en-GB'
+const LOCALE = 'en-US'
 
 const monthTitleFormat = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' })
 const longDayFormat = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' })
@@ -70,12 +70,13 @@ export function clockTime(iso: string): string {
 }
 
 /**
- * The days a month view shows: whole weeks, Monday first, so it starts with the last days of the
- * previous month and ends with the first of the next.
+ * The days a month view shows: whole weeks, Sunday first (the week as calendars in the United
+ * States show it), so it starts with the last days of the previous month and ends with the first
+ * of the next.
  */
 export function monthDays(year: number, monthIndex: number): string[] {
-  // getDay() counts from Sunday; shifted so that Monday is 0.
-  const lead: number = (new Date(year, monthIndex, 1).getDay() + 6) % 7
+  // getDay() counts from Sunday, which is the first column.
+  const lead: number = new Date(year, monthIndex, 1).getDay()
   const length: number = new Date(year, monthIndex + 1, 0).getDate()
   const total: number = Math.ceil((lead + length) / 7) * 7
   const days: string[] = []

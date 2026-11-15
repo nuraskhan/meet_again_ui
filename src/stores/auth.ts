@@ -49,6 +49,12 @@ export const auth = {
     await loadProfile()
   },
 
+  /** Signs in as a demonstration account ("steve-jobs", "steve-wozniak"): no password. */
+  async loginDemo(who: string): Promise<void> {
+    accept(await api.demoLogin(who))
+    await loadProfile()
+  },
+
   loadProfile,
   logout,
 }

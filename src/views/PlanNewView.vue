@@ -492,7 +492,7 @@ async function send(): Promise<void> {
               class="hg-field"
               :class="{ 'hg-field--error': errorField === 'price' }"
               role="group"
-              aria-label="How much, per person"
+              aria-label="How much, per person ($)"
             >
               <span class="hg-field__label">How much, per person</span>
               <div class="new__range">

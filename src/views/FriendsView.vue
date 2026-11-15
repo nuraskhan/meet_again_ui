@@ -32,8 +32,8 @@ const askingMe = computed<Map<number, FriendRequest>>(
 )
 
 // The interface is in English, so dates are too - whatever the language of the browser.
-const dayFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-const monthFormat = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' })
+const dayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
+const monthFormat = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' })
 
 /** "Sat, 14 Nov": a request is days old, the year would only be noise. */
 function day(iso: string): string {

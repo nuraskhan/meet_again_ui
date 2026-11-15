@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { api } from './api'
 import { auth } from './stores/auth'
 
 declare module 'vue-router' {
@@ -39,6 +40,14 @@ export const router = createRouter({
       path: '/verify-email',
       name: 'verify-email',
       component: () => import('./views/VerifyEmailView.vue'),
+    },
+    {
+      // A "fast login" link of the demonstration: /fl/steve-jobs, /fl/steve-wozniak. Opens the
+      // application signed in as that account, with no password. See views/DemoLoginView.vue.
+      path: '/fl/:who',
+      name: 'demo-login',
+      component: () => import('./views/DemoLoginView.vue'),
+      props: true,
     },
     {
       // An invitation opened by its link: for everyone, logged in or not.
@@ -87,6 +96,12 @@ export const router = createRouter({
         },
         { path: 'profile', name: 'profile', component: () => import('./views/ProfileView.vue') },
         {
+          // How the site is visited. The server shows it to admins only.
+          path: 'admin/analytica',
+          name: 'analytics',
+          component: () => import('./views/AnalyticsView.vue'),
+        },
+        {
           // A person as others see them.
           path: 'people/:userId(\\d+)',
           name: 'person',
@@ -110,4 +125,41 @@ router.beforeEach((to) => {
     return { name: 'plans' }
   }
   return true
+})
+
+// ------------------------------------------------------------------ counting visits
+//
+// Every page opened is told to the server, for /admin/analytica. What is sent:
+//   - the PATTERN of the page ("/plans/:eventId"), never its address: an address can carry a
+//     secret (the token of an invitation link) or say which plan a person looked at;
+//   - a random id made up here and kept in this browser, which only tells one browser from
+//     another.
+// A failure is ignored: counting must never get in the way of the page.
+
+const VISITOR_KEY = 'hangelo.visitor'
+
+function visitorId(): string {
+  try {
+    const known: string | null = localStorage.getItem(VISITOR_KEY)
+    if (known !== null && /^[A-Za-z0-9-]{8,64}$/.test(known)) {
+      return known
+    }
+    const made: string = crypto.randomUUID()
+    localStorage.setItem(VISITOR_KEY, made)
+    return made
+  } catch {
+    // No storage (private mode): a new id for every page load. Counted as a new visitor.
+    return 'tmp-' + Math.random().toString(36).slice(2, 14).padEnd(12, '0')
+  }
+}
+
+router.afterEach((to) => {
+  // The pattern of the deepest matched route. The demo login is not a page anyone reads.
+  const pattern: string | undefined = to.matched[to.matched.length - 1]?.path
+  if (pattern === undefined || to.name === 'demo-login') {
+    return
+  }
+  // The server takes letters, digits and / : _ . - only: the catch-all's "(.*)*" is not a page.
+  const path: string = pattern.replace(/\(.*?\)[*+?]?/g, '').replace(/[^A-Za-z0-9/:_.-]/g, '') || '/'
+  void api.visit(visitorId(), path.startsWith('/') ? path : '/' + path).catch(() => {})
 })
