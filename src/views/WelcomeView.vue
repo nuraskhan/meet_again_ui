@@ -420,4 +420,12 @@ const YEAR: number = new Date().getFullYear()
     padding: var(--s-6) var(--s-5);
   }
 }
+
+/* A phone: the bar has room for the logo, the theme switch and one way in. "Create account" is
+   the big button right under it, so the bar keeps only "Log in". */
+@media (max-width: 520px) {
+  [data-tst-id='welcome-register'] {
+    display: none;
+  }
+}
 </style>

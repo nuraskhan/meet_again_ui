@@ -366,6 +366,11 @@ function time(iso: string): string {
         <ChevronRight class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
       </RouterLink>
 
+      <p v-if="chat !== null && chat.eventId !== null" class="chat__about-note">
+        A chat lives with its plan. To delete this chat, open the plan: its organiser can delete
+        the plan, a guest can leave it.
+      </p>
+
       <h4 class="chat__about-sub">{{ members.length }} {{ members.length === 1 ? 'member' : 'members' }}</h4>
       <ul class="hg-list chat__people">
         <li v-for="member in members" :key="member.userId">
@@ -565,6 +570,11 @@ function time(iso: string): string {
 
 .chat__about-title {
   font: var(--t-title-3);
+}
+
+.chat__about-note {
+  color: var(--c-ink-soft);
+  font: var(--t-small);
 }
 
 .chat__about-sub {

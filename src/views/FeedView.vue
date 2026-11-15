@@ -524,4 +524,13 @@ function canOpen(item: FeedItem): boolean {
     width: 100%;
   }
 }
+
+/* The row of filters scrolls by touch or wheel; a scrollbar under it would only take room. */
+.feed__types {
+  scrollbar-width: none;
+}
+
+.feed__types::-webkit-scrollbar {
+  display: none;
+}
 </style>

@@ -65,6 +65,8 @@ export const api = {
   events: () => get<EventDto[]>('/event/list'),
   event: (eventId: number) => get<EventDto>('/event/' + eventId),
   cancelEvent: (eventId: number) => post<void>('/event/' + eventId + '/cancel'),
+  /** The creator deletes the plan: it and its chat disappear for everyone. */
+  deleteEvent: (eventId: number) => post<void>('/event/' + eventId + '/delete'),
 
   // ---------------------------------------------------------------- the feed (public events)
   /** A page of public events, newest first. `beforeId` = the id of the last one already shown. */
@@ -97,7 +99,12 @@ export const api = {
     post<EventDto>('/event/' + eventId + '/guest/' + userId + '/remove'),
 
   /** "Suggest places": the server looks for the best places and keeps the answer with the event. */
-  refreshSuggestions: (eventId: number) => post<EventDto>('/event/' + eventId + '/suggestion/refresh'),
+  /**
+   * With a position: for someone who has not said where they are yet, the server keeps it as
+   * their location and looks for places at once - one press is enough when planning alone.
+   */
+  refreshSuggestions: (eventId: number, position?: { latitude: number; longitude: number }) =>
+    post<EventDto>('/event/' + eventId + '/suggestion/refresh', position),
   /** A participant says where they are and how far they travel, for this event. */
   savePreference: (eventId: number, request: SavePreferenceRequest) =>
     post<EventDto>('/event/' + eventId + '/preference', request),

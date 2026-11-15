@@ -6,7 +6,8 @@
 //   phone   - a bar at the top (logo, bell, account) and a tab bar at the bottom.
 
 import type { Component } from 'vue'
-import { Bell, Calendar, Compass, MessageCircle, Plus, Users } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { Bell, Calendar, Compass, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Users } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -17,6 +18,29 @@ import { chats } from '@/stores/chats'
 import { notifications } from '@/stores/notifications'
 
 const route = useRoute()
+
+// The sidebar can be folded to its icons, to give the page the room. The choice is kept in this
+// browser. (On a medium screen it is always folded, and on a phone there is no sidebar: there the
+// button is not shown.)
+const FOLDED_KEY = 'hangelo.sidebarFolded'
+const folded = ref<boolean>(readFolded())
+
+function toggleFolded(): void {
+  folded.value = !folded.value
+  try {
+    localStorage.setItem(FOLDED_KEY, folded.value ? '1' : '0')
+  } catch {
+    // Storage is unavailable (private mode): the choice lasts until the page is reloaded.
+  }
+}
+
+function readFolded(): boolean {
+  try {
+    return localStorage.getItem(FOLDED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 const NAV: { name: string; label: string; icon: Component }[] = [
   { name: 'feed', label: 'Feed', icon: Compass },
@@ -56,12 +80,26 @@ function bellName(): string {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-shell--folded': folded }">
     <!-- Wide and medium screens -->
     <aside class="hg-sidebar app-shell__side">
-      <RouterLink class="shell__logo" :to="{ name: 'plans' }" aria-label="Hangelo, my plans">
-        <HangeloLogo />
-      </RouterLink>
+      <div class="shell__top">
+        <RouterLink class="shell__logo" :to="{ name: 'plans' }" aria-label="Hangelo, my plans">
+          <HangeloLogo />
+        </RouterLink>
+        <button
+          class="hg-iconbtn shell__fold"
+          type="button"
+          :aria-label="folded ? 'Show the sidebar' : 'Hide the sidebar'"
+          :title="folded ? 'Show the sidebar' : 'Hide the sidebar'"
+          :aria-expanded="!folded"
+          data-tst-id="sidebar-fold"
+          @click="toggleFolded"
+        >
+          <PanelLeftOpen v-if="folded" class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+          <PanelLeftClose v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+        </button>
+      </div>
 
       <RouterLink
         class="hg-btn hg-btn--primary hg-btn--block"
@@ -229,6 +267,29 @@ function bellName(): string {
   display: inline-flex;
   padding: 0 var(--s-2);
   color: var(--c-ink);
+}
+
+/* The logo and, beside it, the button that folds the sidebar. Folded: one under the other. */
+.shell__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.app-shell--folded .shell__top {
+  flex-direction: column;
+}
+
+/* On a medium screen the sidebar is folded always: there is nothing for the button to do. */
+@media (max-width: 1279px) {
+  .shell__top {
+    flex-direction: column;
+  }
+
+  .shell__fold {
+    display: none;
+  }
 }
 
 .shell__account {

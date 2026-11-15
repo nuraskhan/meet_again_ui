@@ -35,14 +35,46 @@ async function ask(): Promise<void> {
   try {
     emit('updated', await api.refreshSuggestions(props.event.id))
   } catch (caught) {
-    // "Nobody is on the map yet" is not a failure: it tells what to do first.
-    problem.value =
-      caught instanceof ApiError && caught.code === 'no_coordinates'
-        ? 'Nobody has put their location on the map yet. Drop your pin first, then ask again.'
-        : errorText(caught)
+    if (caught instanceof ApiError && caught.code === 'no_coordinates') {
+      // Nobody is on the map yet - often one person planning alone. Instead of sending them to
+      // the location form first, ask the device where they are and look for places at once.
+      await askFromHere()
+    } else {
+      problem.value = errorText(caught)
+    }
   } finally {
     busy.value = false
   }
+}
+
+/** Takes the position of the device (the browser asks the person) and suggests from there. */
+async function askFromHere(): Promise<void> {
+  const position: { latitude: number; longitude: number } | null = await whereAmI()
+  if (position === null) {
+    problem.value =
+      'To suggest places we need to know where you are. Allow the location in your browser, or put your pin on the map below, then ask again.'
+    return
+  }
+  try {
+    emit('updated', await api.refreshSuggestions(props.event.id, position))
+  } catch (caught) {
+    problem.value = errorText(caught)
+  }
+}
+
+/** The position of the device; null if there is none or the person said no. */
+function whereAmI(): Promise<{ latitude: number; longitude: number } | null> {
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) {
+      resolve(null)
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (found) => resolve({ latitude: found.coords.latitude, longitude: found.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    )
+  })
 }
 
 /** The place on OpenStreetMap, in a new tab. */
@@ -149,8 +181,8 @@ function safeWebsite(website: string | null): string | null {
     </p>
 
     <p v-else-if="!looked" class="hg-card hg-card--quiet" data-tst-id="suggestions-not-yet">
-      Places appear here once everyone coming has said where they are - or press "Suggest places"
-      any time.
+      Press "Suggest places" to get ideas near you - it works when you plan alone too. Once
+      others say where they are, ask again and the places will suit everyone.
     </p>
   </section>
 </template>

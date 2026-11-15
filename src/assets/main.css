@@ -617,3 +617,25 @@ html[data-theme="dark"] {
     --map-tile-filter: saturate(0.6) brightness(0.7) contrast(1.1);
   }
 }
+
+/* ---- the sidebar folded by hand (the button beside the logo; views/AppShell.vue) ----
+ * The same look as on a medium screen, where it is folded always: icons only. */
+@media (min-width: 1280px) {
+  .app-shell--folded .app-shell__side { width: var(--size-sidebar-collapsed); align-items: center; padding-left: var(--s-3); padding-right: var(--s-3); }
+  .app-shell--folded .app-shell__side .app-wide-only { display: none; }
+  .app-shell--folded .app-shell__side .hg-navitem, .app-shell--folded .app-shell__side .hg-btn { width: var(--size-control); padding: 0; justify-content: center; }
+  .app-shell--folded .app-shell__side .hg-navitem { position: relative; }
+  .app-shell--folded .app-shell__side .hg-navitem .hg-count { position: absolute; top: 0; right: -4px; box-shadow: 0 0 0 2px var(--c-surface-soft); }
+  .app-shell--folded .app-shell__side .hg-account { padding: var(--s-1); }
+}
+
+/* ---- the small icon on an avatar (what kind of notification) ----
+ * The export puts it on the corner of the circle, where it covered the initials. Pushed out a
+ * little further and made a little smaller, the letters stay readable. */
+.hg-avatar__kind { right: -6px; bottom: -6px; width: 18px; height: 18px; }
+.hg-avatar__kind .hg-icon { width: 11px; height: 11px; }
+
+/* ---- nothing scrolls sideways ----
+ * A page wider than the screen is always a mistake on a phone; this keeps one too-wide element
+ * from dragging the whole page with it. */
+html, body { max-width: 100%; overflow-x: clip; }

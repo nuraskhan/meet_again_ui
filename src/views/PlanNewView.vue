@@ -671,4 +671,14 @@ async function send(): Promise<void> {
     width: 100%;
   }
 }
+
+/* A phone: the tiles are narrow, and "Something else" would be cut. Two lines of smaller text. */
+@media (max-width: 767px) {
+  .new__type-label {
+    font: var(--t-small);
+    font-weight: 600;
+    text-align: center;
+    white-space: normal;
+  }
+}
 </style>

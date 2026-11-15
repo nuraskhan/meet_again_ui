@@ -4,7 +4,8 @@
 // the link and the people in a rail on the right (under the rest on a narrow screen).
 
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { CalendarX, ChevronLeft, Globe, MessageCircle, X } from 'lucide-vue-next'
+import { CalendarX, Check, ChevronLeft, Globe, Link, MessageCircle, Share2, Trash2, X } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
 import type { AppNotification, EventDto, Invitee, Preference } from '@/api/types'
@@ -19,6 +20,8 @@ import { auth } from '@/stores/auth'
 import { toastError, toastOk } from '@/stores/toast'
 
 const props = defineProps<{ eventId: number }>()
+
+const router = useRouter()
 
 const event = ref<EventDto | null>(null)
 const loading = ref<boolean>(true)
@@ -194,6 +197,57 @@ async function answer(accept: boolean): Promise<void> {
   } finally {
     busy.value = false
     answering.value = null
+  }
+}
+
+/**
+ * "Share": the share sheet of the device where there is one (a phone: messengers, mail, ...),
+ * copying the link otherwise. The long address itself is no longer shown - nobody reads it.
+ */
+async function shareLink(): Promise<void> {
+  const title: string = event.value?.title ?? 'Hangelo'
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title, text: 'Join my plan: ' + title, url: link.value })
+      return
+    } catch (caught) {
+      // The person closed the sheet: nothing to do. Anything else: fall back to copying.
+      if (caught instanceof DOMException && caught.name === 'AbortError') {
+        return
+      }
+    }
+  }
+  await copyLink()
+}
+
+/** The creator pressed "Delete the plan" once and is asked to confirm. */
+const confirmingDelete = ref<boolean>(false)
+
+/** The plan and its chat disappear for everyone. */
+async function deletePlan(): Promise<void> {
+  busy.value = true
+  try {
+    await api.deleteEvent(props.eventId)
+    toastOk('The plan and its chat are deleted')
+    await router.push({ name: 'plans' })
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    busy.value = false
+  }
+}
+
+/** A guest clears a plan that is over or cancelled, and its chat, from their own lists. */
+async function removeFromMyList(): Promise<void> {
+  busy.value = true
+  try {
+    await api.leaveEvent(props.eventId)
+    toastOk('Removed from your list')
+    await router.push({ name: 'plans' })
+  } catch (caught) {
+    toastError(caught)
+  } finally {
+    busy.value = false
   }
 }
 
@@ -409,26 +463,43 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
         <!-- The link: only the creator gets it from the server. -->
         <section v-if="link !== '' && active" data-tst-id="plan-share">
           <h2 class="plan__rail-title">Invite</h2>
-          <div class="hg-field">
-            <label class="hg-field__label" :for="linkId">Share link</label>
-            <div class="plan__share">
-              <input
-                :id="linkId"
-                class="hg-input"
-                type="text"
-                readonly
-                :value="link"
-                data-tst-id="plan-share-link"
-                @focus="($event.target as HTMLInputElement).select()"
-              />
-              <button class="hg-btn hg-btn--outline" type="button" data-tst-id="plan-share-copy" @click="copyLink">
-                {{ copied ? 'Copied' : 'Copy' }}
-              </button>
-            </div>
-            <p class="hg-field__msg">
-              Anyone with this link can see the invitation. To accept it they log in or register.
-            </p>
+          <div class="plan__share">
+            <button
+              class="hg-btn hg-btn--neutral plan__share-main"
+              type="button"
+              data-tst-id="plan-share-button"
+              @click="shareLink"
+            >
+              <Share2 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>Share</span>
+            </button>
+            <button
+              class="hg-btn hg-btn--outline"
+              type="button"
+              :aria-label="copied ? 'Link copied' : 'Copy the link'"
+              data-tst-id="plan-share-copy"
+              @click="copyLink"
+            >
+              <Check v-if="copied" class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <Link v-else class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+              <span>{{ copied ? 'Copied' : 'Copy link' }}</span>
+            </button>
           </div>
+          <!-- The address itself, for a browser that can neither share nor copy: selectable, but
+               out of the way. -->
+          <input
+            :id="linkId"
+            class="plan__share-link"
+            type="text"
+            readonly
+            aria-label="The link of the invitation"
+            :value="link"
+            data-tst-id="plan-share-link"
+            @focus="($event.target as HTMLInputElement).select()"
+          />
+          <p class="hg-field__msg plan__share-note">
+            Anyone with the link can see the invitation. To accept it they log in or register.
+          </p>
         </section>
 
         <!-- A public plan is joined by asking: the organiser lets people in one by one. -->
@@ -637,6 +708,61 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
             <p class="plan__end-note">It is cancelled for everyone and cannot be undone. The chat will stay.</p>
           </template>
         </div>
+
+        <!-- Deleting: the organiser's way to get rid of a plan and its chat altogether. -->
+        <div v-if="isCreator" class="plan__end">
+          <button
+            v-if="!confirmingDelete"
+            class="hg-btn hg-btn--quiet plan__delete"
+            type="button"
+            data-tst-id="plan-delete"
+            @click="confirmingDelete = true"
+          >
+            <Trash2 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+            <span>Delete the plan and its chat</span>
+          </button>
+          <template v-else>
+            <div class="hg-confirm plan__confirm" role="group" aria-label="Delete the plan?">
+              <span class="hg-confirm__q">Delete the plan?</span>
+              <button
+                class="hg-btn hg-btn--danger-filled"
+                :class="{ 'is-loading': busy }"
+                type="button"
+                :disabled="busy"
+                data-tst-id="plan-delete-confirm"
+                @click="deletePlan"
+              >
+                <span>Yes, delete</span>
+              </button>
+              <button class="hg-btn hg-btn--quiet" type="button" :disabled="busy" @click="confirmingDelete = false">
+                Keep
+              </button>
+            </div>
+            <p class="plan__end-note">
+              The plan and its chat disappear for everyone{{ active ? ', and the guests are told it is off' : '' }}.
+              This cannot be undone.
+            </p>
+          </template>
+        </div>
+
+        <!-- A guest of a plan that is over or cancelled: off their own lists, chat included. -->
+        <div
+          v-if="!isCreator && !active && (mine?.status === 'ACCEPTED' || mine?.status === 'PENDING')"
+          class="plan__end"
+        >
+          <button
+            class="hg-btn hg-btn--quiet plan__delete"
+            :class="{ 'is-loading': busy }"
+            type="button"
+            :disabled="busy"
+            data-tst-id="plan-remove-from-list"
+            @click="removeFromMyList"
+          >
+            <Trash2 class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+            <span>Remove from my list</span>
+          </button>
+          <p class="plan__end-note">The plan and its chat leave your lists. The others keep them.</p>
+        </div>
       </aside>
     </div>
   </div>
@@ -782,6 +908,37 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
 .plan__request-actions {
   display: flex;
   gap: var(--s-2);
+}
+
+.plan__share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.plan__share-main {
+  flex: 1 1 120px;
+}
+
+/* The address: there for selecting by hand, looking like a quiet line of small text. */
+.plan__share-link {
+  width: 100%;
+  margin-top: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink-faint);
+  font: var(--t-caption);
+  text-overflow: ellipsis;
+}
+
+.plan__share-note {
+  margin-top: var(--s-1);
+}
+
+.plan__delete {
+  padding-left: var(--s-2);
+  padding-right: var(--s-2);
 }
 
 .plan__counts {
