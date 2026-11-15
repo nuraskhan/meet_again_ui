@@ -250,9 +250,9 @@ const YEAR: number = new Date().getFullYear()
           </div>
 
           <HangeloLogo :word="false" :size="56" />
-          <h1 class="welcome__title welcome__title--wide">
-            <span class="welcome__line">From “We should hang out”</span>
-            <span class="welcome__line">to “See you there.”</span>
+          <h1 class="welcome__title">
+            <span class="welcome__line">Less planning.</span>
+            <span class="welcome__line">More hanging out.</span>
           </h1>
           <p class="welcome__lead">
             Hangelo turns your friends’ different schedules, budgets, interests and locations into one confirmed plan.
@@ -406,7 +406,10 @@ const YEAR: number = new Date().getFullYear()
 
         <!-- ------------------------------------------------------------ closing -->
         <section class="welcome__closing welcome__reveal">
-          <h2 class="welcome__title">Less planning. More hanging out.</h2>
+          <h2 class="welcome__title welcome__title--wide">
+            <span class="welcome__line">From “We should hang out”</span>
+            <span class="welcome__line">to “See you there.”</span>
+          </h2>
           <p class="welcome__lead">Not another group chat. Not another calendar. Just the plan.</p>
           <RouterLink class="hg-btn hg-btn--neutral hg-btn--lg" :to="{ name: 'register' }">
             Create account
@@ -637,7 +640,7 @@ const YEAR: number = new Date().getFullYear()
   text-wrap: balance;
 }
 
-/* The headline of the first screen breaks where its sense does, wherever a half fits in a line. */
+/* A headline of two halves breaks where its sense does, wherever a half fits in a line. */
 .welcome__title--wide {
   max-width: 760px;
 }

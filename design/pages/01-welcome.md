@@ -11,7 +11,7 @@ Explains in one screen what the application does and gets the visitor to registe
 - Top bar, transparent: the wordmark at the left; at the right a quiet button "Log in" and a
   primary button "Create account".
 - **Hero**, centred, the height of the first screen: the mark, the headline in `--t-display`
-  (the value proposition of the product research: From "We should hang out" to "See you there."),
+  (the tagline of the product research: "Less planning. More hanging out."),
   one sentence under it, the primary button "Create account" and a text link "I already have an
   account". At the bottom a quiet button "How it works" with an arrow down, which scrolls to the
   steps. From 1100 wide, four small pieces of the product lie around the text, slightly askew: a
@@ -27,7 +27,7 @@ Explains in one screen what the application does and gets the visitor to registe
   least a few times a week, 29% see one in person that often), with the source under them.
 - **What comes next**: one soft block with the badge "Coming soon": telling friends in another
   city about a visit. Nothing that is not in the product is shown without this badge.
-- Closing, centred: the tagline "Less planning. More hanging out.", one line of what Hangelo is
+- Closing, centred: the value proposition, From "We should hang out" to "See you there.", one line of what Hangelo is
   not, and a neutral button "Create account".
 - Footer: the wordmark and the year. Nothing else.
 
