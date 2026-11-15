@@ -461,21 +461,15 @@ function canOpen(item: FeedItem): boolean {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
 }
 
-/* Stays in sight while the feed scrolls. With a day chosen and the form open it is taller than
-   the window, so it scrolls by itself: a sticky block taller than the window would keep its lower
-   part out of reach. The padding keeps focus outlines unclipped. */
+/* The rail has no scrolling of its own - no bars, vertical or horizontal. It is as tall as what
+   is in it, and the page is at least that tall: the rail moves with the page like the feed beside
+   it. (It used to stay in sight with a scrollbar of its own once it outgrew the window; a second
+   scrollbar inside the page was the wrong answer.) */
 .feed__rail {
-  position: sticky;
-  top: var(--s-6);
   display: flex;
   flex-direction: column;
   gap: var(--s-5);
   min-width: 0;
-  max-height: calc(100vh - var(--s-6) * 2);
-  max-height: calc(100dvh - var(--s-6) * 2);
-  margin: calc(var(--s-1) * -1);
-  padding: var(--s-1);
-  overflow-y: auto;
 }
 
 .feed__reliability {
