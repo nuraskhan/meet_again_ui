@@ -86,8 +86,8 @@ export function inviteLink(shareToken: string): string {
 /**
  * The full address of a page of the application, to give to someone else.
  *
- * WHY not just origin + path: the application lives under a path of its site (/hangelo/), and an
- * address without it leads to somebody else's page.
+ * WHY not just origin + path: the application may be served under a path of its site ("base" in
+ * vite.config.ts), and an address without that path would lead to somebody else's page.
  *
  * @param path the page as the router knows it, starting with "/"
  */

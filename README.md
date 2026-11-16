@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:19000/hangelo/ and log in as `alice@demo.test` with the password `demo123`
+Open http://localhost:19000 and log in as `alice@demo.test` with the password `demo123`
 (run `make data` in `meet_again` first: it creates these people with a confirmed e-mail).
 
 | Command | What it does |
@@ -46,18 +46,15 @@ Open http://localhost:19000/hangelo/ and log in as `alice@demo.test` with the pa
 
 ## Deployment
 
-The application lives under the path `/hangelo/` of its site, in development too: the root of the
-site it is published on, brainb.kz, belongs to something else. The path is set in one place for the
-build (`base` in `vite.config.ts`) and one for the server (`BASE` in `server.js`).
-
 Heroku runs `npm start` (see `Procfile`), which is `server.js`: it serves the built application
-under `/hangelo/`, forwards `/hangelo/api/*` to the server, and sends any address outside
-`/hangelo` to the same address inside it.
+and forwards `/api/*` to the server.
 
-**brainb.kz/hangelo/.** The nginx of brainb.kz hands `/hangelo/` over to the Heroku application:
-the block to add to its configuration is [deploy/nginx-brainb.kz.conf](deploy/nginx-brainb.kz.conf).
-On the server side, `HANGELO_PUBLIC_URL` must then be `https://brainb.kz/hangelo`, so that links in
-letters lead there.
+**hangelo.brainb.kz.** The application has an address of its own and lives at its root. The address
+is a custom domain of the Heroku application; in the DNS of brainb.kz it is one `CNAME` record,
+`hangelo`, pointing at the target Heroku names for that domain. On the server side,
+`HANGELO_PUBLIC_URL` is `https://hangelo.brainb.kz`, so that links in letters lead there.
+For one release (v0.2.0) the application lived under `/hangelo/`; such addresses are still led to
+the same place without the path.
 
 | Variable | Meaning | Default |
 |----------|---------|---------|

@@ -12,7 +12,7 @@ declare module 'vue-router' {
 }
 
 export const router = createRouter({
-  // Under the path the application is served at (/hangelo/): see vite.config.ts.
+  // Under the path the application is served at: see "base" in vite.config.ts.
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior: () => ({ top: 0 }),
   routes: [

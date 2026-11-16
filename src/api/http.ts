@@ -1,7 +1,7 @@
 // The one place that talks HTTP. Everything else calls the functions of ./index.ts.
 
 /**
- * Where the server is: "api" under the path the application itself lives at (/hangelo/api).
+ * Where the server is: "api" under the path the application itself lives at (the root: /api).
  * In development Vite forwards it to the server (see vite.config.ts), in production server.js does.
  */
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? import.meta.env.BASE_URL + 'api'

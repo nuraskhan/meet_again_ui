@@ -1,14 +1,13 @@
 // The production server of the UI (Heroku runs it: see Procfile). No dependencies, only Node.
 //
-// The application lives under /hangelo/ (the same path as "base" in vite.config.ts): on its site,
-// brainb.kz, the root belongs to something else, and that site's server hands /hangelo/ over to
-// this one. Opening the root of this server leads to /hangelo/.
+// The application lives at the root of its own address, hangelo.brainb.kz (the same as "base" in
+// vite.config.ts).
 //
 // It does the two things the Vite dev server does in development:
 //   1. serves the built application from dist/, answering any unknown path with index.html, so a
-//      reload on /hangelo/plans/7 works;
-//   2. forwards /hangelo/api/* to the backend, so the browser talks to one origin and the backend
-//      needs no CORS setup.
+//      reload on /plans/7 works;
+//   2. forwards /api/* to the backend, so the browser talks to one origin and the backend needs no
+//      CORS setup.
 //
 // Environment:
 //   PORT     where to listen (Heroku sets it); 19000 by default, as in development
@@ -22,8 +21,11 @@ import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.PORT ?? 19000)
 const API_URL = new URL(process.env.API_URL ?? 'http://localhost:29000')
-/** The path the application is served under; no slash at the end. */
-const BASE = '/hangelo'
+/**
+ * The path the application was served under for one release (v0.2.0). Addresses with it are still
+ * around - in letters already sent, in bookmarks - and are led to the same place without it.
+ */
+const OLD_BASE = '/hangelo'
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), 'dist')
 const INDEX = path.join(DIST, 'index.html')
 
@@ -47,19 +49,15 @@ if (!fs.existsSync(INDEX)) {
 
 http
   .createServer((request, response) => {
-    const full = request.url ?? '/'
+    const url = request.url ?? '/'
 
-    // Outside the application's path there is nothing: the root, and the addresses the
-    // application had before it moved under /hangelo (/plans/7, /i/<token> in a letter already
-    // sent), lead to the same place inside it.
-    if (full !== BASE && !full.startsWith(BASE + '/') && !full.startsWith(BASE + '?')) {
-      response.writeHead(302, { location: BASE + (full.startsWith('/') ? full : '/') })
+    // An address from the time under /hangelo: the same address without it.
+    if (url === OLD_BASE || url.startsWith(OLD_BASE + '/') || url.startsWith(OLD_BASE + '?')) {
+      const rest = url.slice(OLD_BASE.length)
+      response.writeHead(302, { location: rest.startsWith('/') ? rest : '/' + rest })
       response.end()
       return
     }
-
-    // From here on the path is as it was before the move: what follows /hangelo.
-    const url = full.slice(BASE.length) || '/'
 
     if (url === '/api' || url.startsWith('/api/') || url.startsWith('/api?')) {
       forwardToBackend(request, response, url.slice('/api'.length) || '/')
@@ -68,7 +66,7 @@ http
     }
   })
   .listen(PORT, () => {
-    console.log('UI on port ' + PORT + ' under ' + BASE + '/, ' + BASE + '/api -> ' + API_URL.origin)
+    console.log('UI on port ' + PORT + ', /api -> ' + API_URL.origin)
   })
 
 function forwardToBackend(request, response, backendPath) {
