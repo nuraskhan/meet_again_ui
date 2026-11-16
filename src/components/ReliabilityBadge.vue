@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // How reliable a person is, as a small badge: "92% reliable".
 //
-// Below 50 the badge becomes the "Air" sticker: a person whose "I'm coming" is, more often than
-// not, air. It says how much air: 100 minus the score.
+// Below 50 the badge becomes the air sticker: a person whose "I'm coming" is, more often than
+// not, air. It is the puff-of-air emoji and how much air: 100 minus the score. No word "air" is
+// written: the picture says it, and the full sentence is in the tooltip and for a screen reader.
 // While there is too little history to judge by (the score is null) nothing is shown - a newcomer
 // is not branded either way.
 
 import { computed } from 'vue'
-import { ShieldCheck, Wind } from 'lucide-vue-next'
+import { ShieldCheck } from 'lucide-vue-next'
 
 const props = withDefaults(
   defineProps<{
@@ -42,8 +43,8 @@ const title = computed<string>(() =>
     data-tst-id="reliability"
   >
     <template v-if="isAir">
-      <Wind class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-      <span data-tst-id="reliability-air">{{ compact ? air + '% air' : 'Air · ' + air + '%' }}</span>
+      <span class="reliability__air" aria-hidden="true">💨</span>
+      <span data-tst-id="reliability-air">{{ air }}%</span>
     </template>
     <template v-else>
       <ShieldCheck class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
@@ -55,5 +56,11 @@ const title = computed<string>(() =>
 <style scoped>
 .reliability {
   font-variant-numeric: tabular-nums;
+}
+
+/* The emoji draws in its own colours whatever the badge's are. */
+.reliability__air {
+  font-size: 1.1em;
+  line-height: 1;
 }
 </style>

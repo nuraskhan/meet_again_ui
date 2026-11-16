@@ -4,6 +4,8 @@
 export interface AuthResponse {
   token: string
   userId: number
+  /** False = the token opens nothing yet but the confirmation of the e-mail. */
+  emailVerified: boolean
 }
 
 /** The privilege level of a person: the base of the future subscription plans. Set by the server. */
@@ -35,6 +37,8 @@ export interface ProfileCard {
 export interface Profile {
   userId: number
   displayName: string
+  /** A word we put by the name ("Team"); null = none. Set in the database only. */
+  tag: string | null
   /** Whole years; null if the person gave no date of birth. */
   age: number | null
   pronouns: string | null
@@ -100,6 +104,8 @@ export interface UpdateProfileRequest {
 export interface Friend {
   userId: number
   displayName: string
+  /** A word we put by the name ("Team"); null = none. */
+  tag: string | null
   city: string | null
   avatarUrl: string | null
   friendsSince: string
@@ -157,6 +163,8 @@ export interface Invitee {
   invitationId: number
   userId: number
   displayName: string
+  /** A word we put by the name ("Team"); null = none. */
+  tag: string | null
   status: InvitationStatus
   respondedAt: string | null
   /** The farthest the guest is ready to go, miles. Null = not said yet. */
@@ -268,6 +276,8 @@ export interface Chat {
 export interface ChatMember {
   userId: number
   displayName: string
+  /** A word we put by the name ("Team"); null = none. */
+  tag: string | null
   avatarUrl: string | null
 }
 
@@ -277,6 +287,17 @@ export interface ChatMessage {
   authorName: string
   text: string
   createdAt: string
+  /** The message this one answers, in short; null = it answers nothing. */
+  replyTo: ChatReply | null
+}
+
+/** An answered message as shown above the answer: who wrote it and its beginning. */
+export interface ChatReply {
+  id: number
+  authorId: number
+  authorName: string
+  /** The beginning of the answered message; the server cuts a long one. */
+  text: string
 }
 
 /**

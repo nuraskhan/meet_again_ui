@@ -3,7 +3,7 @@
 // New ones appear here by themselves while the page is open (see stores/notifications.ts).
 // They are shown by day - "Today", "Yesterday", then dates - in the time zone of the browser.
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { Ban, Bell, Calendar, Check, Hand, LogIn, LogOut, UserCheck, UserPlus, X } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
@@ -70,9 +70,47 @@ const days = computed<DayGroup[]>(() => {
   return groups
 })
 
+/**
+ * The notifications that were new when the page was opened. Opening the page reads them all - the
+ * number on the bell goes to zero and stays there - but for this visit they keep their mark, so
+ * that the person can see which ones they have not seen before.
+ */
+const freshIds = ref<Set<number>>(new Set())
+
+function isFresh(notification: AppNotification): boolean {
+  return !notification.read || freshIds.value.has(notification.id)
+}
+
+/** Everything unread on the page becomes read on the server; the marks of this visit stay. */
+async function readWhatIsShown(): Promise<void> {
+  const unread: AppNotification[] = notifications.state.items.filter((item) => !item.read)
+  if (unread.length === 0 && notifications.state.unread === 0) {
+    return
+  }
+  for (const item of unread) {
+    freshIds.value.add(item.id)
+  }
+  try {
+    await notifications.markAllRead()
+  } catch {
+    // Not worth a message: they stay unread and the next visit reads them.
+  }
+}
+
+// One that arrives while the page is open is seen as it arrives.
+watch(
+  () => notifications.state.unread,
+  (unread) => {
+    if (unread > 0 && !loading.value) {
+      void readWhatIsShown()
+    }
+  },
+)
+
 onMounted(async () => {
   try {
     await notifications.loadList()
+    await readWhatIsShown()
   } catch (caught) {
     toastError(caught)
   } finally {
@@ -219,7 +257,7 @@ async function more(): Promise<void> {
                    the notification is marked as read on the way. -->
               <a
                 class="hg-row hg-row--72 hg-row--link notes__row"
-                :class="{ 'hg-row--new': !notification.read }"
+                :class="{ 'hg-row--new': isFresh(notification) }"
                 :href="router.resolve(target(notification)).href"
                 data-tst-id="notification"
                 @click.prevent="open(notification)"
@@ -245,7 +283,7 @@ async function more(): Promise<void> {
                   <span class="notes__sentence" data-tst-id="notification-text"><b v-if="actorPart(notification) !== ''">{{ actorPart(notification) }}</b>{{ notification.text.slice(actorPart(notification).length) }}</span>
                   <time class="hg-row__time" :datetime="notification.createdAt">{{ when(notification.createdAt) }}</time>
                 </span>
-                <span v-if="!notification.read" class="hg-row__trail">
+                <span v-if="isFresh(notification)" class="hg-row__trail">
                   <span class="hg-dot"></span>
                   <span class="hg-sr">Unread</span>
                 </span>

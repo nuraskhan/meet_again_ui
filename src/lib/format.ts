@@ -80,7 +80,19 @@ export function proposedTimesSummary(times: string[]): string {
 
 /** The address people open to see an invitation. */
 export function inviteLink(shareToken: string): string {
-  return window.location.origin + '/i/' + encodeURIComponent(shareToken)
+  return appUrl('/i/' + encodeURIComponent(shareToken))
+}
+
+/**
+ * The full address of a page of the application, to give to someone else.
+ *
+ * WHY not just origin + path: the application lives under a path of its site (/hangelo/), and an
+ * address without it leads to somebody else's page.
+ *
+ * @param path the page as the router knows it, starting with "/"
+ */
+export function appUrl(path: string): string {
+  return window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + path
 }
 
 export function date(iso: string): string {

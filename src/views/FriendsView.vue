@@ -7,6 +7,7 @@ import { api } from '@/api'
 import type { AppNotification, Friend, FriendRequest, ProfileCard } from '@/api/types'
 import { onSignal } from '@/stores/signal'
 import UserAvatar from '@/components/UserAvatar.vue'
+import UserTag from '@/components/UserTag.vue'
 import { toastError, toastOk } from '@/stores/toast'
 
 const friends = ref<Friend[]>([])
@@ -310,7 +311,7 @@ async function change(what: string, action: () => Promise<void>): Promise<void> 
           >
             <UserAvatar :name="friend.displayName" :user-id="friend.userId" :avatar-url="friend.avatarUrl" />
             <RouterLink class="hg-row__text friends__who" :to="{ name: 'person', params: { userId: friend.userId } }">
-              <span class="hg-row__title">{{ friend.displayName }}</span>
+              <span class="hg-row__title">{{ friend.displayName }} <UserTag :tag="friend.tag" /></span>
               <span class="hg-row__sub">
                 {{ friend.city ? friend.city + ' · ' : '' }}Friends since {{ month(friend.friendsSince) }}
               </span>

@@ -19,8 +19,13 @@ const props = defineProps<{
 
 const playing = ref<boolean>(false)
 
+// "vq=hd720" asks for 720p from the start: a screen recording is unreadable below that. It is a
+// REQUEST ONLY. YouTube no longer promises to honour it and picks the quality itself, from the
+// size of the player and the speed of the connection; there is no supported way to force it.
 const embed: string =
-  'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(props.videoId) + '?autoplay=1&rel=0'
+  'https://www.youtube-nocookie.com/embed/' +
+  encodeURIComponent(props.videoId) +
+  '?autoplay=1&rel=0&vq=hd720'
 const watch: string = 'https://www.youtube.com/watch?v=' + encodeURIComponent(props.videoId)
 </script>
 

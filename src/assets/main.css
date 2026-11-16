@@ -639,3 +639,24 @@ html[data-theme="dark"] {
  * A page wider than the screen is always a mistake on a phone; this keeps one too-wide element
  * from dragging the whole page with it. */
 html, body { max-width: 100%; overflow-x: clip; }
+
+/* ---------------------------------------------------------------- touch: no zoom by accident
+ *
+ * On a phone a quick second tap zooms the page in - the browser's "double-tap to zoom". In an
+ * application that is tapped fast (sending messages, switching days) it fires by mistake and the
+ * person has to pinch back out. "manipulation" keeps scrolling and the two-finger zoom - the one
+ * people use on purpose, and need if their sight is weak - and drops only the double tap.
+ */
+html {
+  touch-action: manipulation;
+}
+
+/* The same trouble from another side: iOS zooms the page into any field whose text is smaller
+ * than 16px when it is tapped, and does not zoom back out. On a phone every field has 16px text. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -32,7 +32,8 @@ import PreferenceForm from '@/components/PreferenceForm.vue'
 import SuggestedPlaces from '@/components/SuggestedPlaces.vue'
 import ProposedTimes from '@/components/ProposedTimes.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import { EVENT_TYPE_LOOK, inviteLink } from '@/lib/format'
+import UserTag from '@/components/UserTag.vue'
+import { EVENT_TYPE_LOOK, appUrl, inviteLink } from '@/lib/format'
 import { markLinkSent, planSteps, wasLinkSent, type PlanStep } from '@/lib/planSteps'
 import { USER_STORY_PREFIX, useUserStory } from '@/lib/userStory'
 import { auth } from '@/stores/auth'
@@ -216,7 +217,7 @@ const link = computed<string>(() => {
   }
   // A link sent from the user story opens the invitation in the user story too.
   return inStory.value
-    ? window.location.origin + USER_STORY_PREFIX + '/i/' + encodeURIComponent(token)
+    ? appUrl(USER_STORY_PREFIX + '/i/' + encodeURIComponent(token))
     : inviteLink(token)
 })
 
@@ -1012,6 +1013,7 @@ async function answerRequest(invitee: Invitee, approve: boolean): Promise<void> 
               >
                 <span class="hg-row__title">
                   {{ invitee.displayName }}
+                  <UserTag :tag="invitee.tag" />
                   <span v-if="invitee.userId === auth.state.userId" class="hg-soft">(you)</span>
                 </span>
                 <span v-if="guestPreference(invitee) !== ''" class="hg-row__sub" data-tst-id="invitee-preference">

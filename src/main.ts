@@ -1,6 +1,6 @@
 import './assets/main.css'
 
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import App from './App.vue'
 import { router } from './router'
 import { auth, onLogout } from './stores/auth'
@@ -19,6 +19,17 @@ onLogout(() => {
     void router.push({ name: 'login' })
   }
 })
+
+// The e-mail turned out not to be confirmed (an account from before confirming became required,
+// found out when its profile loaded): out of the private pages, to the one page there is.
+watch(
+  () => auth.isPending.value,
+  (pending) => {
+    if (pending && router.currentRoute.value.meta.requiresAuth === true) {
+      void router.replace({ name: 'confirm-email' })
+    }
+  },
+)
 
 // A token remembered from the last visit: load who it belongs to. If it has expired, the server
 // answers 401 and the http layer logs out.

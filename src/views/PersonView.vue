@@ -19,6 +19,7 @@ import {
 } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError, serverFileUrl } from '@/api/http'
+import UserTag from '@/components/UserTag.vue'
 import type { AvailabilityKind, FriendAvailability, Profile } from '@/api/types'
 import ReliabilityBadge from '@/components/ReliabilityBadge.vue'
 import { addDays, availabilityPhrase, dayRange, today } from '@/lib/dates'
@@ -303,6 +304,7 @@ async function loadComing(): Promise<void> {
           >
             <h1 class="person__name">
               {{ person.displayName }}
+              <UserTag :tag="person.tag" />
               <span v-if="person.age !== null" class="person__age">{{ person.age }}</span>
             </h1>
             <p v-if="photoLine !== ''">{{ photoLine }}</p>

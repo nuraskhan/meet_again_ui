@@ -14,8 +14,8 @@ import HangeloLogo from '@/components/HangeloLogo.vue'
 import PlusDialog from '@/components/PlusDialog.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import VerifyEmailBanner from '@/components/VerifyEmailBanner.vue'
 import { auth } from '@/stores/auth'
+import UserTag from '@/components/UserTag.vue'
 import { chats } from '@/stores/chats'
 import { notifications } from '@/stores/notifications'
 
@@ -223,6 +223,7 @@ function bellName(): string {
         <span class="shell__account app-wide-only">
           <b class="shell__name">
             {{ auth.state.profile?.displayName ?? '' }}
+            <UserTag :tag="auth.state.profile?.tag" />
             <span v-if="onPlus" class="hg-badge shell__plus" data-tst-id="plus-badge">Plus</span>
           </b>
           <span class="shell__hint">View profile</span>
@@ -273,7 +274,6 @@ function bellName(): string {
       <!-- Not on the chat pages: they fill the screen exactly, and a banner above would push the
            message field off it. -->
       <div v-if="route.name !== 'chat' && route.name !== 'chats'" class="app-col app-col--rail">
-        <VerifyEmailBanner />
       </div>
 
       <RouterView v-slot="{ Component: page }">

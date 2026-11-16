@@ -5,15 +5,17 @@
 // break: a signal can be lost, the message must not be.
 // The messages are shown by day, and inside a day in runs: what one person wrote in a row stands
 // under their name once, with the time under the last of it.
+// Any message can be answered: the answer carries the beginning of what it answers above it.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, ChevronRight, MessageCircle, X } from 'lucide-vue-next'
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, ChevronRight, MessageCircle, Reply, X } from 'lucide-vue-next'
 import { api } from '@/api'
 import { ApiError } from '@/api/http'
-import type { Chat, ChatMember, ChatMessage, ChatMessageSignal } from '@/api/types'
+import type { Chat, ChatMember, ChatMessage, ChatMessageSignal, ChatReply } from '@/api/types'
 import { onSignal, RECONNECTED } from '@/stores/signal'
 import EventTypeIcon from '@/components/EventTypeIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
+import UserTag from '@/components/UserTag.vue'
 import { auth } from '@/stores/auth'
 import { chats as chatStore } from '@/stores/chats'
 import { toastError } from '@/stores/toast'
@@ -69,6 +71,12 @@ const loadingOlder = ref<boolean>(false)
 
 const draft = ref<string>('')
 const sending = ref<boolean>(false)
+/** The message being answered; null = an ordinary message is being written. */
+const replyingTo = ref<ChatMessage | null>(null)
+const input = ref<HTMLTextAreaElement | null>(null)
+/** The message just jumped to from an answer: lit for a moment, so the eye finds it. */
+const litId = ref<number | null>(null)
+let litTimer: number | undefined
 
 /** How many messages of others arrived while the reader was looking at older ones. */
 const unseen = ref<number>(0)
@@ -165,6 +173,7 @@ const stopListening: (() => void)[] = [
 
 onBeforeUnmount(() => {
   window.clearInterval(timer)
+  window.clearTimeout(litTimer)
   stopListening.forEach((stop) => stop())
   // Off the screen: from now on what arrives here is new again. (Unless another chat has already
   // taken the screen - moving from chat to chat mounts the next before this one is gone.)
@@ -240,9 +249,10 @@ async function send(): Promise<void> {
   }
   sending.value = true
   try {
-    const message: ChatMessage = await api.postChatMessage(props.chatId, text)
+    const message: ChatMessage = await api.postChatMessage(props.chatId, text, replyingTo.value?.id)
     chatStore.noteOwnMessage(props.chatId, message)
     draft.value = ''
+    replyingTo.value = null
     await addNew([message])
     await scrollToEnd()
   } catch (caught) {
@@ -252,12 +262,42 @@ async function send(): Promise<void> {
   }
 }
 
-/** Enter sends, Shift+Enter makes a new line. */
+/** Enter sends, Shift+Enter makes a new line, Escape gives up answering. */
 function onKey(event: KeyboardEvent): void {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void send()
+  } else if (event.key === 'Escape' && replyingTo.value !== null) {
+    replyingTo.value = null
   }
+}
+
+/** "Answer this message": it stands above the field until sent or given up. */
+function answer(message: ChatMessage): void {
+  replyingTo.value = message
+  input.value?.focus()
+}
+
+/** Whose message an answer answers, the way it is said to the reader. */
+function replyAuthor(reply: ChatReply | ChatMessage): string {
+  return reply.authorId === auth.state.userId ? 'You' : reply.authorName
+}
+
+/**
+ * From an answer to the message it answers. Only if that message is among the loaded ones: an
+ * older one is above "Earlier messages", and its beginning is already shown in the answer.
+ */
+function showAnswered(reply: ChatReply): void {
+  const element: Element | null | undefined = list.value?.querySelector('[data-message-id="' + reply.id + '"]')
+  if (!element) {
+    return
+  }
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  litId.value = reply.id
+  window.clearTimeout(litTimer)
+  litTimer = window.setTimeout(() => {
+    litId.value = null
+  }, 1600)
 }
 
 function isAtEnd(): boolean {
@@ -397,6 +437,7 @@ function time(iso: string): string {
             />
             <span class="hg-row__title app-grow">
               {{ member.displayName }}
+              <UserTag :tag="member.tag" />
               <span v-if="member.userId === auth.state.userId" class="chat__you">(you)</span>
             </span>
           </RouterLink>
@@ -461,15 +502,49 @@ function time(iso: string): string {
               />
               <div class="hg-run__body">
                 <p v-if="!run.mine" class="hg-run__name">{{ run.authorName }}</p>
-                <!-- On one line: the bubble keeps the line breaks of the text, and would keep
-                     the ones of this template too. -->
-                <p
+                <div
                   v-for="(message, index) in run.messages"
                   :key="message.id"
-                  class="hg-bubble chat__bubble"
-                  :class="{ 'hg-bubble--own': run.mine, 'hg-bubble--first': index === 0 }"
-                  data-tst-id="chat-message"
-                >{{ message.text }}</p>
+                  class="chat__line"
+                  :class="{ 'chat__line--own': run.mine }"
+                  :data-message-id="message.id"
+                >
+                  <div
+                    class="hg-bubble chat__bubble"
+                    :class="{
+                      'hg-bubble--own': run.mine,
+                      'hg-bubble--first': index === 0,
+                      'chat__bubble--lit': litId === message.id,
+                    }"
+                    data-tst-id="chat-message"
+                  >
+                    <!-- What this message answers: the beginning of it. A click goes to it. -->
+                    <button
+                      v-if="message.replyTo !== null"
+                      class="chat__quote"
+                      type="button"
+                      :aria-label="'Answer to ' + replyAuthor(message.replyTo) + ': ' + message.replyTo.text"
+                      data-tst-id="chat-message-quote"
+                      @click="showAnswered(message.replyTo)"
+                    >
+                      <span class="chat__quote-name">{{ replyAuthor(message.replyTo) }}</span>
+                      <span class="chat__quote-text">{{ message.replyTo.text }}</span>
+                    </button>
+                    <!-- On one line: the text keeps the line breaks it was written with, and would
+                         keep the ones of this template too. -->
+                    <p class="chat__text">{{ message.text }}</p>
+                  </div>
+                  <button
+                    class="hg-iconbtn chat__answer"
+                    type="button"
+                    :aria-label="'Reply to ' + replyAuthor(message) + ': ' + message.text.slice(0, 60)"
+                    title="Reply"
+                    data-tst-id="chat-message-reply"
+                    @click="answer(message)"
+                  >
+                    <Reply class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+                  </button>
+                </div>
                 <time class="hg-run__time" :datetime="run.endedAt">{{ time(run.endedAt) }}</time>
               </div>
             </div>
@@ -483,8 +558,26 @@ function time(iso: string): string {
       </div>
 
       <form class="chat__form" data-tst-id="chat-form" @submit.prevent="send">
+        <!-- What is being answered, above the field, until sent or given up. -->
+        <div v-if="replyingTo !== null" class="chat__replying" data-tst-id="chat-replying">
+          <Reply class="hg-icon chat__replying-icon" :stroke-width="1.5" aria-hidden="true" />
+          <span class="chat__replying-body">
+            <span class="chat__quote-name">Replying to {{ replyAuthor(replyingTo) }}</span>
+            <span class="chat__quote-text">{{ replyingTo.text }}</span>
+          </span>
+          <button
+            class="hg-iconbtn"
+            type="button"
+            aria-label="Do not reply"
+            data-tst-id="chat-replying-cancel"
+            @click="replyingTo = null"
+          >
+            <X class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
+          </button>
+        </div>
         <div class="hg-composer">
           <textarea
+            ref="input"
             v-model="draft"
             class="hg-textarea chat__input"
             rows="1"
@@ -696,9 +789,125 @@ function time(iso: string): string {
   margin-bottom: auto;
 }
 
-/* A message keeps the line breaks it was written with (Shift+Enter). */
+/* A message and, beside it, the button that answers it. */
+.chat__line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  max-width: 100%;
+}
+
+.chat__line--own {
+  flex-direction: row-reverse;
+}
+
 .chat__bubble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+  transition: box-shadow var(--dur-2) var(--ease);
+}
+
+/* Jumped to from an answer: a ring for a moment. */
+.chat__bubble--lit {
+  box-shadow: 0 0 0 3px var(--c-accent-soft), 0 0 0 4px var(--c-accent);
+}
+
+/* A message keeps the line breaks it was written with (Shift+Enter). */
+.chat__text {
+  margin: 0;
   white-space: pre-wrap;
+}
+
+/* The answered message inside the answer: a line at the side, the name, the beginning. */
+.chat__quote {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 2px var(--s-2);
+  border: 0;
+  border-left: 3px solid currentColor;
+  border-radius: var(--r-s);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  font: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat__quote-name {
+  font-weight: 600;
+}
+
+.chat__quote-text {
+  display: -webkit-box;
+  overflow: hidden;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* The answer button: out of the way until the message is pointed at. On a touch screen there is
+   no pointing, so it is always there, faint. */
+.chat__answer {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  color: var(--c-ink-soft);
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.chat__line:hover .chat__answer,
+.chat__answer:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .chat__answer {
+    opacity: 0.55;
+  }
+}
+
+.chat__answer .hg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Above the field: what is being answered. */
+.chat__replying {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+  padding: var(--s-1) var(--s-1) var(--s-1) var(--s-3);
+  border-left: 3px solid var(--c-accent);
+  border-radius: var(--r-s);
+  background: var(--c-surface-soft);
+  font: var(--t-small);
+}
+
+.chat__replying-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--c-accent-text);
+}
+
+.chat__replying-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat__replying .chat__quote-text {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
 }
 
 .chat__new {

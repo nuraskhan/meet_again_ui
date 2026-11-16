@@ -12,7 +12,8 @@ declare module 'vue-router' {
 }
 
 export const router = createRouter({
-  history: createWebHistory(),
+  // Under the path the application is served at (/hangelo/): see vite.config.ts.
+  history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
     {
@@ -42,12 +43,11 @@ export const router = createRouter({
       component: () => import('./views/VerifyEmailView.vue'),
     },
     {
-      // A "fast login" link of the demonstration: /fl/steve-jobs, /fl/steve-wozniak. Opens the
-      // application signed in as that account, with no password. See views/DemoLoginView.vue.
-      path: '/fl/:who',
-      name: 'demo-login',
-      component: () => import('./views/DemoLoginView.vue'),
-      props: true,
+      // Registered or logged in, but the e-mail is not confirmed: the application is closed, and
+      // this is the only page there is. See views/ConfirmEmailView.vue.
+      path: '/confirm-email',
+      name: 'confirm-email',
+      component: () => import('./views/ConfirmEmailView.vue'),
     },
     {
       // An invitation opened by its link: for everyone, logged in or not.
@@ -139,6 +139,16 @@ export const router = createRouter({
 
 router.beforeEach((to) => {
   const loggedIn: boolean = auth.isLoggedIn.value
+  // Has an account but has not confirmed the e-mail: neither a visitor nor inside.
+  const pending: boolean = auth.isPending.value
+
+  if (to.name === 'confirm-email') {
+    return pending ? true : { name: loggedIn ? 'plans' : 'login' }
+  }
+
+  if (pending && (to.meta.requiresAuth === true || to.meta.guestOnly === true)) {
+    return { name: 'confirm-email' }
+  }
 
   if (to.meta.requiresAuth === true && !loggedIn) {
     // Remember where they were going, to return there after login.
@@ -177,9 +187,9 @@ function visitorId(): string {
 }
 
 router.afterEach((to) => {
-  // The pattern of the deepest matched route. The demo login is not a page anyone reads.
+  // The pattern of the deepest matched route.
   const pattern: string | undefined = to.matched[to.matched.length - 1]?.path
-  if (pattern === undefined || to.name === 'demo-login') {
+  if (pattern === undefined) {
     return
   }
   // The server takes letters, digits and / : _ . - only: the catch-all's "(.*)*" is not a page.

@@ -41,21 +41,6 @@ watch(
   },
 )
 
-/** Signs in as a demonstration account - the same as opening its "fast login" link. */
-async function demo(who: string): Promise<void> {
-  error.value = ''
-  busy.value = true
-  try {
-    await auth.loginDemo(who)
-    const target: string = nextPath.value
-    await router.replace(target === '' ? { name: 'plans' } : target)
-  } catch (caught) {
-    error.value = errorText(caught)
-  } finally {
-    busy.value = false
-  }
-}
-
 async function submit(): Promise<void> {
   error.value = ''
   busy.value = true
@@ -65,6 +50,13 @@ async function submit(): Promise<void> {
       await auth.register(email.value, password.value, displayName.value)
     } else {
       await auth.login(email.value, password.value)
+    }
+
+    // The e-mail is not confirmed yet (always so right after registering): nothing is open but
+    // the page that says "check your inbox".
+    if (auth.isPending.value) {
+      await router.replace({ name: 'confirm-email' })
+      return
     }
 
     // Back to where they were going before they were asked to log in.
@@ -179,31 +171,6 @@ async function submit(): Promise<void> {
           </template>
         </p>
 
-        <!-- For a demonstration: in as one of two ready accounts, with no password. The two are
-             friends, so one can invite the other at once. -->
-        <div class="auth__demo" data-tst-id="auth-demo">
-          <p class="auth__demo-title">Just looking? Try the demo</p>
-          <div class="auth__demo-buttons">
-            <button
-              class="hg-btn hg-btn--outline"
-              type="button"
-              :disabled="busy"
-              data-tst-id="auth-demo-steve-jobs"
-              @click="demo('steve-jobs')"
-            >
-              Steve Jobs
-            </button>
-            <button
-              class="hg-btn hg-btn--outline"
-              type="button"
-              :disabled="busy"
-              data-tst-id="auth-demo-steve-wozniak"
-              @click="demo('steve-wozniak')"
-            >
-              Steve Wozniak
-            </button>
-          </div>
-        </div>
       </form>
     </div>
 
@@ -388,24 +355,4 @@ async function submit(): Promise<void> {
   }
 }
 
-.auth__demo {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  margin-top: var(--s-5);
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--c-line);
-}
-
-.auth__demo-title {
-  color: var(--c-ink-soft);
-  font: var(--t-small);
-  text-align: center;
-}
-
-.auth__demo-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-2);
-}
 </style>

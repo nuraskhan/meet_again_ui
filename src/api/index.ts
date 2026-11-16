@@ -39,8 +39,6 @@ export const api = {
   register: (email: string, password: string, displayName: string) =>
     post<AuthResponse>('/auth/register', { email, password, displayName }),
   login: (email: string, password: string) => post<AuthResponse>('/auth/login', { email, password }),
-  /** Signs in as a demonstration account by its word: "steve-jobs" or "steve-wozniak". */
-  demoLogin: (who: string) => post<AuthResponse>('/auth/demo/' + encodeURIComponent(who)),
   /** Tells the server a page was opened: its pattern, and a random id of this browser. */
   visit: (visitorId: string, path: string) => post<void>('/public/visit', { visitorId, path }),
   /** May the current user see the analytics. */
@@ -193,8 +191,9 @@ export const api = {
     ),
   /** The chat is read up to its newest message: its unread count becomes zero. */
   markChatRead: (chatId: number) => post<void>('/chat/' + chatId + '/read'),
-  postChatMessage: (chatId: number, text: string) =>
-    post<ChatMessage>('/chat/' + chatId + '/message', { text }),
+  /** @param replyToId the message of this chat being answered; absent = an ordinary message */
+  postChatMessage: (chatId: number, text: string, replyToId?: number) =>
+    post<ChatMessage>('/chat/' + chatId + '/message', replyToId === undefined ? { text } : { text, replyToId }),
 
   // ---------------------------------------------------------------- notifications
   /** Newest first; the next page is asked with the id of the last one got. */

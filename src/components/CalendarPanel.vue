@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // The calendar: one month in which the user sees everything that decides whether a day is free -
 // their plans, the days they marked themselves (busy, free, away on a trip) and whether friends
-// marked anything. Choosing a day shows it in words under (or beside) the grid, and days are
+// marked anything. It is drawn the way training calendars are: a ruled month, and in each day the
+// things of that day written out - a coloured chip per plan with its icon, time and name. Where
+// the month is narrow (a phone, the rail) a chip shrinks to a dot of the same colour. Choosing a day shows it in words under (or beside) the grid, and days are
 // marked from there.
 //
 // Self-contained: it loads what it shows. `compact` is for the narrow rail beside the feed.
@@ -48,11 +50,10 @@ const KIND_LABEL: Record<AvailabilityKind, string> = { BUSY: 'Busy', FREE: 'Free
 const MAX_BANDS: number = 2
 
 /**
- * A plan is a line under the date, one line per plan, in the colour of its activity. Up to this
- * many lines fit; a day with more plans shows their number instead, on a tint of the same colour.
- * (It used to be a dot with a number beside the date: "2" next to "21" read as part of the date.)
+ * A plan is a chip in its day, in the colour of its activity. Up to this many fit in a cell; a
+ * day with more says "+2" after them, and the details beside the month list them all.
  */
-const MAX_PLAN_LINES: number = 3
+const MAX_PLAN_CHIPS: number = 3
 
 /** The colour a plan's line has, by its activity: the same hues as the pictures of the activities. */
 const PLAN_COLOUR: Record<EventTypeCode, string> = {
@@ -201,9 +202,21 @@ const plansByDay = computed<Map<string, PlanOnDay[]>>(() => {
   return byDay
 })
 
+/** A plan as it stands in a day cell. */
+interface PlanChip {
+  id: number
+  type: EventTypeCode
+  colour: string
+  /** The first of its times that day, as short as it can be said: "7pm", "7:30pm". */
+  time: string
+  title: string
+}
+
 interface Band {
   id: number
   kind: AvailabilityKind
+  /** Written on the band where it begins, and again where a new week begins: "Trip · Almaty". */
+  label: string
   /** The first / the last day of the mark: the band gets a rounded end there. */
   start: boolean
   end: boolean
@@ -215,10 +228,10 @@ interface DayCell {
   inMonth: boolean
   today: boolean
   plans: number
-  /** The colour of each plan of the day, in order; empty when there are too many for lines. */
-  planLines: string[]
-  /** The colour behind the number, when the plans are shown as a number. */
-  planTint: string
+  /** The first plans of the day, earliest first: as many as fit. */
+  chips: PlanChip[]
+  /** How many plans of the day did not fit. */
+  morePlans: number
   bands: Band[]
   /** How many friends marked something for the day. */
   friends: number
@@ -229,8 +242,13 @@ interface DayCell {
 const cells = computed<DayCell[]>(() =>
   days.value.map((date: string): DayCell => {
     const marks: Availability[] = mine.value.filter((mark) => covers(mark, date))
-    const dayPlans: PlanOnDay[] = plansByDay.value.get(date) ?? []
+    // Earliest first, as a day is read.
+    const dayPlans: PlanOnDay[] = [...(plansByDay.value.get(date) ?? [])].sort((a, b) =>
+      (a.times[0] ?? '').localeCompare(b.times[0] ?? ''),
+    )
     const planCount: number = dayPlans.length
+    // A band is named where it begins and at the start of each week it runs into (Sunday).
+    const weekStarts: boolean = fromYmd(date).getDay() === 0
     const friendCount: number = new Set<number>(
       friends.value.filter((mark) => covers(mark, date)).map((mark) => mark.userId),
     ).size
@@ -249,11 +267,21 @@ const cells = computed<DayCell[]>(() =>
       inMonth: date.startsWith(monthPrefix.value),
       today: date === now,
       plans: planCount,
-      planLines: planCount > MAX_PLAN_LINES ? [] : dayPlans.map((plan) => PLAN_COLOUR[plan.event.eventType]),
-      planTint: dayPlans.length > 0 ? PLAN_COLOUR[dayPlans[0]!.event.eventType] : '',
+      chips: dayPlans.slice(0, MAX_PLAN_CHIPS).map((plan) => ({
+        id: plan.event.id,
+        type: plan.event.eventType,
+        colour: PLAN_COLOUR[plan.event.eventType],
+        time: plan.times[0] === undefined ? '' : chipTime(plan.times[0]),
+        title: plan.event.title,
+      })),
+      morePlans: Math.max(0, planCount - MAX_PLAN_CHIPS),
       bands: marks.slice(0, MAX_BANDS).map((mark) => ({
         id: mark.id,
         kind: mark.kind,
+        label:
+          mark.fromDate === date || weekStarts
+            ? KIND_LABEL[mark.kind] + (mark.kind === 'TRIP' && mark.city ? ' · ' + mark.city : '')
+            : '',
         start: mark.fromDate === date,
         end: mark.toDate === date,
       })),
@@ -262,6 +290,18 @@ const cells = computed<DayCell[]>(() =>
     }
   }),
 )
+
+/**
+ * The time of a plan for a chip: "7pm", "7:30pm". A day cell is some eighty pixels wide, and
+ * "07:00 PM" alone would fill it and push the name of the plan out.
+ */
+function chipTime(iso: string): string {
+  const moment = new Date(iso)
+  const hours: number = moment.getHours()
+  const minutes: number = moment.getMinutes()
+  const hour12: number = hours % 12 === 0 ? 12 : hours % 12
+  return hour12 + (minutes === 0 ? '' : ':' + String(minutes).padStart(2, '0')) + (hours < 12 ? 'am' : 'pm')
+}
 
 // ------------------------------------------------------------------ the chosen day
 
@@ -467,22 +507,21 @@ async function save(): Promise<void> {
                 <span v-if="cell.friends > 0" class="calendar__dot calendar__dot--friends"></span>
               </span>
             </span>
-            <!-- The plans of the day, under the date: a soft coloured line each; with more than
-                 three, their number on the same soft colour. -->
+            <!-- The plans of the day, written into it: a chip each, in the colour of the activity.
+                 In a narrow month only the dot of the chip is left. -->
             <span v-if="cell.plans > 0" class="calendar__plans" data-tst-id="calendar-day-plans">
               <span
-                v-for="(colour, index) in cell.planLines"
-                :key="index"
-                class="calendar__plan-line"
-                :style="{ '--plan': colour }"
-              ></span>
-              <span
-                v-if="cell.planLines.length === 0"
-                class="calendar__plan-count hg-num"
-                :style="{ '--plan': cell.planTint }"
+                v-for="chip in cell.chips"
+                :key="chip.id"
+                class="calendar__chip"
+                :style="{ '--plan': chip.colour }"
               >
-                {{ cell.plans }}
+                <span class="calendar__chip-dot"></span>
+                <EventTypeIcon class="calendar__chip-icon" :type="chip.type" :size="12" />
+                <span class="calendar__chip-time hg-num">{{ chip.time }}</span>
+                <span class="calendar__chip-title">{{ chip.title }}</span>
               </span>
+              <span v-if="cell.morePlans > 0" class="calendar__more hg-num">+{{ cell.morePlans }}</span>
             </span>
             <!-- The user's own marks: a band per mark, unbroken from its first day to its last. -->
             <span class="calendar__bands">
@@ -494,7 +533,9 @@ async function save(): Promise<void> {
                   'calendar__band--' + band.kind,
                   { 'calendar__band--start': band.start, 'calendar__band--end': band.end },
                 ]"
-              ></span>
+              >
+                <span v-if="band.label !== ''" class="calendar__band-label">{{ band.label }}</span>
+              </span>
             </span>
           </button>
         </div>
@@ -514,7 +555,7 @@ async function save(): Promise<void> {
             Trip
           </li>
           <li class="calendar__legend-item">
-            <span class="calendar__plan-line calendar__swatch" :style="{ '--plan': PLAN_COLOUR.FOOD }"></span>
+            <span class="calendar__chip-dot" :style="{ '--plan': PLAN_COLOUR.FOOD }"></span>
             Plan
           </li>
           <li class="calendar__legend-item">
@@ -787,9 +828,23 @@ async function save(): Promise<void> {
   text-align: center;
 }
 
-/* No gap between the columns: a band has to run from one day into the next without a break. */
+/* A ruled month: hairlines between the days, drawn by the gaps over the colour of a line. A band
+   still reads as one from day to day - a hairline crosses it, as it crosses the paper. */
 .calendar__grid {
-  row-gap: var(--s-1);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  background: var(--c-line);
+}
+
+.calendar__weekdays {
+  margin-bottom: var(--s-1);
+}
+
+.calendar__weekday {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ---------------------------------------------------------------- a day */
@@ -798,15 +853,22 @@ async function save(): Promise<void> {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  justify-content: flex-start;
+  gap: 3px;
   min-width: 0;
   min-height: 56px;
   padding: var(--s-1) 0;
   border: 0;
-  border-radius: var(--r-s);
-  background: transparent;
+  border-radius: 0;
+  background: var(--c-surface);
   color: var(--c-ink);
   cursor: pointer;
   transition: background-color var(--dur-1) var(--ease);
+}
+
+/* A day of a neighbour month: stepped back. */
+.calendar__day--out {
+  background: var(--c-surface-soft);
 }
 
 .calendar--compact .calendar__day {
@@ -819,8 +881,8 @@ async function save(): Promise<void> {
 
 /* The chosen day: a frame drawn inside, so the grid does not move. */
 .calendar__day[aria-pressed='true'] {
-  background: var(--c-surface-soft);
-  box-shadow: inset 0 0 0 2px var(--c-ink);
+  background: var(--c-accent-soft);
+  box-shadow: inset 0 0 0 2px var(--c-accent);
 }
 
 /* The outline of the page would be hidden by the neighbour cells: draw it inside. */
@@ -877,36 +939,44 @@ async function save(): Promise<void> {
   border-radius: var(--r-full);
 }
 
-/* A plan: a soft line in the colour of its activity (--plan), under the date. The colour is
-   softened by opacity, so a day with a plan is marked without shouting. */
+/* The plans of a day. Narrow month: a row of dots under the date. With room (see the container
+   rule at the bottom): a column of chips, each with the icon, the time and the name. */
 .calendar__plans {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  padding: 0 var(--s-1);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 2px;
 }
 
-.calendar__plan-line {
-  display: block;
-  height: 4px;
+.calendar__chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The dot: the whole chip where the month is narrow; in the legend too. */
+.calendar__chip-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
   border-radius: var(--r-full);
   background: var(--plan);
-  opacity: 0.6;
 }
 
-/* More plans than lines fit: their number, on a tint of the colour. */
-.calendar__plan-count {
-  align-self: center;
-  min-width: 20px;
-  padding: 0 var(--s-1);
-  border-radius: var(--r-full);
-  background: color-mix(in srgb, var(--plan) 22%, transparent);
-  color: var(--c-ink);
+.calendar__chip-icon,
+.calendar__chip-time,
+.calendar__chip-title {
+  display: none;
+}
+
+.calendar__more {
+  color: var(--c-ink-soft);
   font: var(--t-caption);
-  line-height: 16px;
-  text-align: center;
-  opacity: 0.85;
+  line-height: 1;
 }
 
 /* Friends: an empty ring. */
@@ -917,17 +987,26 @@ async function save(): Promise<void> {
 
 /* ---------------------------------------------------------------- bands */
 
+/* At the bottom of the day, whatever stands above. */
 .calendar__bands {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 14px;
+  margin-top: auto;
+  min-height: 6px;
   justify-content: flex-end;
 }
 
 .calendar__band {
   display: block;
   height: 6px;
+  /* Over the hairline to the next day, so a mark of several days is one band. */
+  margin-right: -1px;
+}
+
+/* The name of the mark: only where there is room for words. */
+.calendar__band-label {
+  display: none;
 }
 
 .calendar__band--start {
@@ -1142,7 +1221,108 @@ async function save(): Promise<void> {
 
   .calendar:not(.calendar--compact) .calendar__day,
   .calendar:not(.calendar--compact) .calendar__skel {
-    min-height: 72px;
+    min-height: 112px;
+  }
+
+  /* The number in the corner, as in a paper calendar; the day's things under it. */
+  .calendar:not(.calendar--compact) .calendar__day {
+    align-items: stretch;
+    padding: var(--s-1) 0 0;
+    text-align: left;
+  }
+
+  /* A plan written out: a tinted chip with a bar of its colour, the icon, the time, the name. */
+  .calendar:not(.calendar--compact) .calendar__plans {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 0 3px;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__chip {
+    display: flex;
+    gap: 3px;
+    padding: 2px var(--s-1) 2px 3px;
+    border-left: 3px solid var(--plan);
+    border-radius: var(--r-s);
+    background: color-mix(in srgb, var(--plan) 14%, var(--c-surface));
+    color: var(--c-ink);
+    font: var(--t-caption);
+    line-height: 1.25;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__chip-dot {
+    display: none;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__chip-icon {
+    display: inline-block;
+    flex: none;
+    color: var(--plan);
+  }
+
+  .calendar:not(.calendar--compact) .calendar__chip-time {
+    display: inline;
+    flex: none;
+    color: var(--c-ink-soft);
+  }
+
+  .calendar:not(.calendar--compact) .calendar__chip-title {
+    display: block;
+    overflow: hidden;
+    min-width: 0;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__more {
+    padding-left: var(--s-1);
+    text-align: left;
+  }
+
+  /* A mark with its name on it. */
+  .calendar:not(.calendar--compact) .calendar__band {
+    display: flex;
+    align-items: center;
+    height: 16px;
+    overflow: visible;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__band-label {
+    display: block;
+    position: relative;
+    z-index: 1;
+    padding: 0 var(--s-2);
+    color: var(--c-ink);
+    font: var(--t-caption);
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__band--TRIP .calendar__band-label {
+    color: var(--c-on-accent);
+  }
+
+  /* On the hatching of "busy" letters cannot be read: the name stands on a plain ground. */
+  .calendar:not(.calendar--compact) .calendar__band--BUSY .calendar__band-label {
+    margin-left: var(--s-1);
+    padding: 0 var(--s-1);
+    border-radius: var(--r-s);
+    background: var(--c-surface);
+    line-height: 14px;
+  }
+
+  .calendar:not(.calendar--compact) .calendar__band--FREE {
+    border-width: 1px;
+  }
+
+  /* The legend's pieces keep the small size. */
+  .calendar:not(.calendar--compact) .calendar__swatch {
+    height: 6px;
   }
 }
 </style>

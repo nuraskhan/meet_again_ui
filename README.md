@@ -13,8 +13,9 @@ Try it: https://meet-again-ui-112b5408b3d1.herokuapp.com/
 [![Watch the Hangelo demo on YouTube](https://img.youtube.com/vi/LBUlGUmj4EQ/hqdefault.jpg)](https://www.youtube.com/watch?v=LBUlGUmj4EQ)
 
 ▶ [Watch the walk-through on YouTube](https://www.youtube.com/watch?v=LBUlGUmj4EQ). The same video plays
-right on the [welcome page](https://meet-again-ui-112b5408b3d1.herokuapp.com/), and "Try demo" there
-opens the application as Steve Jobs or Steve Wozniak with no sign-up.
+right on the [welcome page](https://meet-again-ui-112b5408b3d1.herokuapp.com/). To try the application,
+create an account and open the link in the confirmation letter: until the e-mail is confirmed,
+nothing else is open.
 
 ```mermaid
 flowchart LR
@@ -34,7 +35,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:19000 and log in as `alice@demo.test` with the password `demo123`.
+Open http://localhost:19000/hangelo/ and log in as `alice@demo.test` with the password `demo123`
+(run `make data` in `meet_again` first: it creates these people with a confirmed e-mail).
 
 | Command | What it does |
 |---------|--------------|
@@ -44,8 +46,18 @@ Open http://localhost:19000 and log in as `alice@demo.test` with the password `d
 
 ## Deployment
 
-Heroku runs `npm start` (see `Procfile`), which is `server.js`: it serves the built application and
-forwards `/api/*` to the server.
+The application lives under the path `/hangelo/` of its site, in development too: the root of the
+site it is published on, brainb.kz, belongs to something else. The path is set in one place for the
+build (`base` in `vite.config.ts`) and one for the server (`BASE` in `server.js`).
+
+Heroku runs `npm start` (see `Procfile`), which is `server.js`: it serves the built application
+under `/hangelo/`, forwards `/hangelo/api/*` to the server, and sends any address outside
+`/hangelo` to the same address inside it.
+
+**brainb.kz/hangelo/.** The nginx of brainb.kz hands `/hangelo/` over to the Heroku application:
+the block to add to its configuration is [deploy/nginx-brainb.kz.conf](deploy/nginx-brainb.kz.conf).
+On the server side, `HANGELO_PUBLIC_URL` must then be `https://brainb.kz/hangelo`, so that links in
+letters lead there.
 
 | Variable | Meaning | Default |
 |----------|---------|---------|

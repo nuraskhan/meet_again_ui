@@ -27,7 +27,7 @@ onMounted(async () => {
   try {
     await api.verifyEmail(token)
     state.value = 'confirmed'
-    // If this browser is logged in, the strip asking to confirm should go away at once.
+    // If this browser holds the account that was waiting for this, it is let in now.
     auth.loadProfile().catch(() => {})
   } catch (caught) {
     state.value = 'failed'
@@ -62,7 +62,7 @@ onMounted(async () => {
             <Check class="hg-icon hg-icon--48" :stroke-width="1.5" aria-hidden="true" />
           </span>
           <h1 class="verify-page__title" data-tst-id="verify-email-ok">Your e-mail is confirmed</h1>
-          <p class="verify-page__text">You will get reminders about your plans.</p>
+          <p class="verify-page__text">Hangelo is open to you now.</p>
           <RouterLink
             class="hg-btn hg-btn--primary verify-page__button"
             :to="{ name: auth.isLoggedIn.value ? 'plans' : 'login' }"
@@ -78,7 +78,7 @@ onMounted(async () => {
           <h1 class="verify-page__title" data-tst-id="verify-email-failed">That did not work</h1>
           <p class="verify-page__text">{{ failure }}</p>
           <p class="verify-page__text">
-            Log in and press "Send again" at the top of the page to get a fresh link.
+            Log in and press "Send again" to get a fresh link.
           </p>
           <RouterLink
             class="hg-btn hg-btn--primary verify-page__button"
