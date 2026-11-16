@@ -55,6 +55,15 @@ configureHttp({
   token: () => state.token ?? state.pendingToken,
   // The server refused our token: forget it and go to the login page.
   unauthorized: () => logout(),
+  // The server says "confirm your e-mail first" to a request made with a REMEMBERED token: a
+  // session from before confirming became required. It can do nothing; it is ended, and the login
+  // page leads to the code. (A pending token gets the same answer on purpose - it is waiting for
+  // the code on its own page - and is left alone.)
+  unconfirmed: () => {
+    if (state.token !== null) {
+      logout()
+    }
+  },
 })
 
 export const auth = {

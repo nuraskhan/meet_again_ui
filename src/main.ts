@@ -14,10 +14,17 @@ import './stores/theme'
 
 // When the session ends (the user logs out, or the server refuses the token), leave the private
 // pages.
+//
+// WHY it waits for the router: a session can end while the very first page is still on its way
+// (a remembered token turns out to be of no use before the page has loaded). At that moment the
+// router is nowhere yet, "the current page" is not a private one, and nobody would be sent to the
+// login page - the person was left inside an application that answered nothing.
 onLogout(() => {
-  if (router.currentRoute.value.meta.requiresAuth === true) {
-    void router.push({ name: 'login' })
-  }
+  void router.isReady().then(() => {
+    if (router.currentRoute.value.meta.requiresAuth === true) {
+      void router.replace({ name: 'login' })
+    }
+  })
 })
 
 // A token remembered from the last visit: load who it belongs to. If it has expired, the server

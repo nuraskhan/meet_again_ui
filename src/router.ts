@@ -52,6 +52,13 @@ export const router = createRouter({
       component: () => import('./views/ConfirmEmailView.vue'),
     },
     {
+      // For developers: where to report a bug, the open issues, how to contribute, the latest
+      // release. For everyone, logged in or not.
+      path: '/dev',
+      name: 'dev',
+      component: () => import('./views/DevView.vue'),
+    },
+    {
       // An invitation opened by its link: for everyone, logged in or not.
       path: '/i/:shareToken',
       name: 'invite',
@@ -139,7 +146,20 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  // A remembered token, and nobody has asked the server yet whom it belongs to (the first page
+  // after a reload): ask before going anywhere that depends on it. The answer may end the
+  // session - an expired token, or an account whose e-mail is not confirmed - and then the
+  // person goes to the login page instead of into an application that would answer nothing.
+  if (auth.isLoggedIn.value && auth.state.profile === null
+      && (to.meta.requiresAuth === true || to.meta.guestOnly === true)) {
+    try {
+      await auth.loadProfile()
+    } catch {
+      // The server cannot be reached: go on with what is remembered; the page will say so.
+    }
+  }
+
   const loggedIn: boolean = auth.isLoggedIn.value
   // Has an account but has not confirmed the e-mail: neither a visitor nor inside.
   const pending: boolean = auth.isPending.value

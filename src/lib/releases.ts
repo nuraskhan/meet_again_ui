@@ -1,7 +1,7 @@
 // The releases of Hangelo, read from RELEASES.md at the root of the repository.
 //
 // WHY the file is read and not copied here: the list of releases is kept in git as a document
-// people read on GitHub. A second copy for the welcome page would be forgotten on the first busy
+// people read on GitHub. A second copy for the page that shows them (/dev) would be forgotten on the first busy
 // deploy, and the page would then show an old release as the latest. So there is one source, and
 // the build takes it in as text.
 //
@@ -29,7 +29,7 @@ export const RELEASES_URL = 'https://github.com/nuraskhan/meet_again_ui/blob/mai
  * Every card of the text, in the order of the file (newest first).
  *
  * Forgiving on purpose: a line it does not understand is skipped, never an error - a slip in a
- * document must not break the welcome page.
+ * document must not break the page that shows it.
  */
 export function parseReleases(text: string): Release[] {
   const releases: Release[] = []

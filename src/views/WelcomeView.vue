@@ -5,21 +5,11 @@
 
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
-import { ArrowDown, ArrowUpRight, Bug, Check, Clock, Coffee, GitPullRequest, Heart, ListChecks, MapPin, Mountain, Plane, Star, Utensils, Wallet } from 'lucide-vue-next'
+import { ArrowDown, ArrowUpRight, Check, Clock, Coffee, Heart, MapPin, Mountain, Plane, Star, Utensils, Wallet } from 'lucide-vue-next'
 import HangeloLogo from '@/components/HangeloLogo.vue'
 import DemoVideo from '@/components/DemoVideo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { FREE_FEATURES, PLUS_FEATURES, PLUS_PRICE_MONTH, PLUS_PRICE_YEAR } from '@/lib/plus'
-import { appliedDay, latestRelease, RELEASES_URL } from '@/lib/releases'
-import type { Release } from '@/lib/releases'
-
-// The code of Hangelo is public, in two repositories on GitHub. The welcome page says so to developers:
-// where to report a bug, where the open issues are, and that a pull request is welcome.
-const REPO_UI = 'https://github.com/nuraskhan/meet_again_ui'
-const REPO_SERVER = 'https://github.com/nuraskhan/meet_again'
-
-// The newest deployed release, from RELEASES.md: the one card shown here; the rest are in git.
-const release: Release | null = latestRelease()
 
 // The words of this page follow the product research (the Business Cup document): its tagline, its
 // value proposition, the four things a group has to reconcile, and the two figures it quotes.
@@ -186,11 +176,15 @@ const YEAR: number = new Date().getFullYear()
           <HangeloLogo />
         </RouterLink>
 
-        <!-- What a visitor most often looks for first: what it costs. -->
-        <nav class="welcome__nav" aria-label="On this page">
+        <!-- What a visitor most often looks for first: what it costs. And, for those who build:
+             the page for developers (bugs, issues, contributing, releases). -->
+        <nav class="welcome__nav" aria-label="More">
           <button class="hg-btn hg-btn--quiet" type="button" data-tst-id="welcome-pricing-link" @click="showPricing">
             Pricing
           </button>
+          <RouterLink class="hg-btn hg-btn--quiet" :to="{ name: 'dev' }" data-tst-id="welcome-dev-link">
+            Developers
+          </RouterLink>
         </nav>
 
         <span class="app-grow"></span>
@@ -473,93 +467,6 @@ const YEAR: number = new Date().getFullYear()
               <p class="welcome__plan-note">Demo — no real payment</p>
             </article>
           </div>
-        </section>
-
-        <!-- ------------------------------------------------------------ for developers -->
-        <!-- The code is public. Three ways in: say what is broken, see what is open, send a
-             change. Every link leaves the site, to GitHub. -->
-        <section class="welcome__dev welcome__reveal" aria-labelledby="welcome-dev" data-tst-id="welcome-dev">
-          <h2 id="welcome-dev" class="welcome__step-title">Built in the open</h2>
-          <p class="welcome__dev-lead">
-            The code of Hangelo is public on GitHub. Found a bug, miss a feature, want to build one? Come in.
-          </p>
-
-          <div class="welcome__dev-cards">
-            <a
-              class="welcome__dev-card"
-              :href="REPO_UI + '/issues/new'"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-tst-id="welcome-dev-bug"
-            >
-              <span class="hg-iconcircle"><Bug class="hg-icon" :stroke-width="1.5" aria-hidden="true" /></span>
-              <span class="welcome__dev-name">Report a bug</span>
-              <span class="welcome__dev-text">Say what you did, what you expected and what happened. A screenshot helps.</span>
-            </a>
-            <a
-              class="welcome__dev-card"
-              :href="REPO_UI + '/issues'"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-tst-id="welcome-dev-issues"
-            >
-              <span class="hg-iconcircle"><ListChecks class="hg-icon" :stroke-width="1.5" aria-hidden="true" /></span>
-              <span class="welcome__dev-name">Open issues</span>
-              <span class="welcome__dev-text">See what is known and what is planned, add your voice, or pick one to work on.</span>
-            </a>
-            <a
-              class="welcome__dev-card"
-              :href="REPO_UI + '/blob/main/CONTRIBUTING.md'"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-tst-id="welcome-dev-contribute"
-            >
-              <span class="hg-iconcircle"><GitPullRequest class="hg-icon" :stroke-width="1.5" aria-hidden="true" /></span>
-              <span class="welcome__dev-name">Contribute</span>
-              <span class="welcome__dev-text">Fork, change, open a pull request. Anyone can; every one is reviewed before it is merged.</span>
-            </a>
-          </div>
-
-          <!-- The latest release: one card. Every deploy adds a card to RELEASES.md; only the
-               newest is shown here, the rest are a click away in git. -->
-          <article v-if="release !== null" class="welcome__release" data-tst-id="welcome-release">
-            <header class="welcome__release-head">
-              <span class="hg-badge welcome__release-version hg-num" data-tst-id="welcome-release-version">
-                v{{ release.version }}
-              </span>
-              <h3 class="welcome__release-title">Latest release</h3>
-              <time v-if="release.applied !== null" class="welcome__release-when hg-num" :title="release.applied">
-                Applied {{ appliedDay(release.applied) }}
-              </time>
-            </header>
-
-            <div class="welcome__release-groups">
-              <section v-for="part in release.changes" :key="part.group" class="welcome__release-group">
-                <h4 class="welcome__release-group-name">{{ part.group }}</h4>
-                <ul class="welcome__release-list">
-                  <li v-for="item in part.items" :key="item">{{ item }}</li>
-                </ul>
-              </section>
-            </div>
-
-            <a
-              class="welcome__release-all"
-              :href="RELEASES_URL"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-tst-id="welcome-release-all"
-            >
-              All releases on GitHub
-              <ArrowUpRight class="hg-icon" :stroke-width="1.5" aria-hidden="true" />
-            </a>
-          </article>
-
-          <p class="welcome__dev-repos">
-            The code:
-            <a :href="REPO_UI" target="_blank" rel="noopener noreferrer" data-tst-id="welcome-dev-repo-ui">web application</a>
-            ·
-            <a :href="REPO_SERVER" target="_blank" rel="noopener noreferrer" data-tst-id="welcome-dev-repo-server">server</a>
-          </p>
         </section>
 
         <!-- ------------------------------------------------------------ closing -->
@@ -1135,153 +1042,6 @@ const YEAR: number = new Date().getFullYear()
 @media (max-width: 520px) {
   [data-tst-id='welcome-register'] {
     display: none;
-  }
-}
-
-/* ---------------------------------------------------------------- for developers */
-
-.welcome__dev {
-  max-width: 860px;
-  margin: calc(var(--s-8) * 1.5) auto 0;
-  text-align: center;
-}
-
-.welcome__dev-lead {
-  margin-top: var(--s-3);
-  color: var(--c-ink-soft);
-}
-
-.welcome__dev-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s-4);
-  margin-top: var(--s-6);
-  text-align: left;
-}
-
-/* A link that looks like a card. ":hover" is named too, so the page's rule for links (blue,
-   underlined) does not reach inside. */
-.welcome__dev-card,
-.welcome__dev-card:hover {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  padding: var(--s-5);
-  border: 1px solid var(--c-line);
-  border-radius: var(--r-l);
-  background: var(--c-surface);
-  color: var(--c-ink);
-  text-decoration: none;
-  transition:
-    border-color var(--dur-1) var(--ease),
-    transform var(--dur-2) var(--ease);
-}
-
-.welcome__dev-card:hover,
-.welcome__dev-card:focus-visible {
-  border-color: var(--c-accent);
-  transform: translateY(-2px);
-}
-
-.welcome__dev-name {
-  margin-top: var(--s-2);
-  font: var(--t-title-3);
-}
-
-.welcome__dev-text {
-  color: var(--c-ink-soft);
-  font: var(--t-small);
-}
-
-/* The latest release: one card under the three ways in. */
-.welcome__release {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  margin-top: var(--s-4);
-  padding: var(--s-5);
-  border: 1px solid var(--c-line);
-  border-radius: var(--r-l);
-  background: var(--c-surface);
-  text-align: left;
-}
-
-.welcome__release-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-3);
-}
-
-.welcome__release-version {
-  border-color: transparent;
-  background: var(--c-accent-soft);
-  color: var(--c-accent-text);
-}
-
-.welcome__release-title {
-  flex: 1 1 auto;
-  font: var(--t-title-3);
-}
-
-.welcome__release-when {
-  color: var(--c-ink-soft);
-  font: var(--t-small);
-}
-
-/* The groups side by side where there is room, one under another where there is not. */
-.welcome__release-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--s-4) var(--s-6);
-}
-
-.welcome__release-group-name {
-  margin-bottom: var(--s-1);
-  color: var(--c-ink-soft);
-  font: var(--t-caption);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.welcome__release-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  padding-left: var(--s-4);
-  list-style: disc;
-  font: var(--t-small);
-}
-
-.welcome__release-all {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: var(--s-1);
-  font: var(--t-small);
-}
-
-.welcome__release-all .hg-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.welcome__dev-repos {
-  margin-top: var(--s-5);
-  color: var(--c-ink-soft);
-  font: var(--t-small);
-}
-
-@media (max-width: 767px) {
-  .welcome__dev-cards {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .welcome__dev-card:hover,
-  .welcome__dev-card:focus-visible {
-    transform: none;
   }
 }
 

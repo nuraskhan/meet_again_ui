@@ -21,11 +21,20 @@ export class ApiError extends Error {
 
 let tokenProvider: () => string | null = () => null
 let onUnauthorized: () => void = () => {}
+let onUnconfirmed: () => void = () => {}
 
-/** Called once at startup by the auth store: how to get the token and what to do when it is refused. */
-export function configureHttp(options: { token: () => string | null; unauthorized: () => void }): void {
+/**
+ * Called once at startup by the auth store: how to get the token, what to do when it is refused,
+ * and what to do when the server says the e-mail of its account is not confirmed.
+ */
+export function configureHttp(options: {
+  token: () => string | null
+  unauthorized: () => void
+  unconfirmed: () => void
+}): void {
   tokenProvider = options.token
   onUnauthorized = options.unauthorized
+  onUnconfirmed = options.unconfirmed
 }
 
 export function get<T>(path: string): Promise<T> {
@@ -124,6 +133,13 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
   }
 
   const refusal = json as { code?: string; message?: string } | undefined
+
+  // "Confirm your e-mail first": the server opens nothing to this token. Whoever holds it is told
+  // (the auth store decides what that means: a remembered session is over).
+  if (response.status === 403 && refusal?.code === 'email_not_verified' && token !== null) {
+    onUnconfirmed()
+  }
+
   throw new ApiError(
     response.status,
     refusal?.code ?? '',
