@@ -19,6 +19,14 @@ The format is fixed, because the welcome page reads this file (`src/lib/releases
 The version: the minor number grows with a batch that adds or changes what people can do, the patch
 number with a batch of fixes only. The rule for when a card is written is in `CLAUDE.md`.
 
+## v0.4.0
+Applied: 2026-11-16 08:28 UTC
+Web: bfa294e · Server: d3d5678
+
+### Changed
+- The e-mail is confirmed by a six-digit code from the letter, typed right after registering or logging in. The link in the letter still works too.
+- An account with an unconfirmed e-mail is not remembered: after a reload it logs in again, gets a fresh code and types it.
+
 ## v0.3.0
 Applied: 2026-11-16 08:14 UTC
 Web: f4807fa · Server: unchanged
