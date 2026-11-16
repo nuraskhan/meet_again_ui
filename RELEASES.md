@@ -2,14 +2,14 @@
 
 Every deploy of Hangelo is one card here: its version, when it was applied, and the batch of
 changes it carried - the web application and the server together, because people meet them as one
-product. The newest card is on top. The welcome page shows the newest applied card and links here
+product. The newest card is on top. The page for developers (`/dev`) shows the newest applied card and links here
 for the rest.
 
-The format is fixed, because the welcome page reads this file (`src/lib/releases.ts`):
+The format is fixed, because the page for developers reads this file (`src/lib/releases.ts`):
 
 - a card begins with `## v<major>.<minor>.<patch>`;
 - the next line is `Applied: <YYYY-MM-DD HH:MM> UTC`, or `Applied: pending` for a batch that is
-  written but not deployed yet (the welcome page skips a pending card);
+  written but not deployed yet (the page for developers skips a pending card);
 - then `Web: <commit> · Server: <commit>`: the commit of each repository that was deployed, or
   `unchanged` for the one that was not;
 - then the changes, under `### Added`, `### Changed`, `### Fixed`, `### Removed` - only the
@@ -18,6 +18,17 @@ The format is fixed, because the welcome page reads this file (`src/lib/releases
 
 The version: the minor number grows with a batch that adds or changes what people can do, the patch
 number with a batch of fixes only. The rule for when a card is written is in `CLAUDE.md`.
+
+## v0.4.1
+Applied: 2026-11-16 08:41 UTC
+Web: 7f45569 · Server: unchanged
+
+### Fixed
+- A session remembered from before e-mail confirmation became required no longer hangs on a page that answers nothing: it is logged out and taken to the login page.
+
+### Changed
+- The section for developers moved from the welcome page to a page of its own, /dev, linked from the top bar.
+- On that page a bug can be reported, issues read and a change sent to either part of Hangelo: the web application or the server.
 
 ## v0.4.0
 Applied: 2026-11-16 08:28 UTC
