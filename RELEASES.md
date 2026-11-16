@@ -19,6 +19,13 @@ The format is fixed, because the welcome page reads this file (`src/lib/releases
 The version: the minor number grows with a batch that adds or changes what people can do, the patch
 number with a batch of fixes only. The rule for when a card is written is in `CLAUDE.md`.
 
+## v0.3.0
+Applied: 2026-11-16 08:14 UTC
+Web: f4807fa · Server: unchanged
+
+### Changed
+- Hangelo has an address of its own: hangelo.brainb.kz. The /hangelo/ part of the address is gone; links that still have it lead to the same place.
+
 ## v0.2.0
 Applied: 2026-11-16 07:58 UTC
 Web: fbf66e7 · Server: da65c91
