@@ -55,7 +55,7 @@ async function submit(): Promise<void> {
     // The e-mail is not confirmed yet (always so right after registering): nothing is open but
     // the page that says "check your inbox".
     if (auth.isPending.value) {
-      await router.replace({ name: 'confirm-email' })
+      await router.replace({ name: 'confirm-email', query: nextPath.value === '' ? {} : { next: nextPath.value } })
       return
     }
 

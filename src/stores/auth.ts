@@ -11,6 +11,10 @@
 // WHY the pending token is kept apart and not in `token`: everything that starts by itself when
 // someone is logged in (the stream of signals, the bell, the chats) watches `token`. With an
 // unconfirmed account all of it would start, be refused, and try again.
+//
+// A pending token lives in memory only, never in localStorage: an account that is not confirmed
+// is not remembered. Close the tab or reload, and the way back is the login page - which sends a
+// fresh code and asks for it.
 
 import { computed, reactive } from 'vue'
 import { api } from '@/api'
@@ -18,7 +22,8 @@ import { configureHttp } from '@/api/http'
 import type { AuthResponse, MyProfile } from '@/api/types'
 
 const TOKEN_KEY = 'hangelo.token'
-const PENDING_TOKEN_KEY = 'hangelo.pendingToken'
+/** Where an earlier version kept the pending token. Nothing is written there now; it is cleared. */
+const OLD_PENDING_TOKEN_KEY = 'hangelo.pendingToken'
 const USER_ID_KEY = 'hangelo.userId'
 
 interface AuthState {
@@ -32,7 +37,7 @@ interface AuthState {
 
 const state: AuthState = reactive({
   token: readStorage(TOKEN_KEY),
-  pendingToken: readStorage(PENDING_TOKEN_KEY),
+  pendingToken: null,
   userId: toNumber(readStorage(USER_ID_KEY)),
   profile: null,
 })
@@ -43,6 +48,8 @@ let afterLogout: () => void = () => {}
 export function onLogout(handler: () => void): void {
   afterLogout = handler
 }
+
+writeStorage(OLD_PENDING_TOKEN_KEY, null)
 
 configureHttp({
   token: () => state.token ?? state.pendingToken,
@@ -83,14 +90,15 @@ function hold(token: string, confirmed: boolean): void {
   state.token = confirmed ? token : null
   state.pendingToken = confirmed ? null : token
   writeStorage(TOKEN_KEY, state.token)
-  writeStorage(PENDING_TOKEN_KEY, state.pendingToken)
 }
 
 /**
  * Loads the profile of whoever holds the token, pending or not. What it says about the e-mail
- * decides which of the two the token is: this is how a pending account is let in once the link
- * from the letter was opened (maybe on another device), and how an account from before
- * confirming became required is put on hold.
+ * decides what the token is worth:
+ *   - a pending token of an account that is confirmed now (the code was typed, or the link from
+ *     the letter opened somewhere) becomes a real one: the person is in;
+ *   - a remembered token of an account that is NOT confirmed (an account from before confirming
+ *     became required) is dropped: back to the login page, which leads to the code.
  */
 async function loadProfile(): Promise<void> {
   const token: string | null = state.token ?? state.pendingToken
@@ -100,6 +108,10 @@ async function loadProfile(): Promise<void> {
   const profile: MyProfile = await api.myProfile()
   // Logged out, or in as someone else, while the answer was on its way: it is not ours any more.
   if ((state.token ?? state.pendingToken) !== token) {
+    return
+  }
+  if (!profile.emailVerified && state.token !== null) {
+    logout()
     return
   }
   state.profile = profile
@@ -112,7 +124,6 @@ function logout(): void {
   state.userId = null
   state.profile = null
   writeStorage(TOKEN_KEY, null)
-  writeStorage(PENDING_TOKEN_KEY, null)
   writeStorage(USER_ID_KEY, null)
   afterLogout()
 }

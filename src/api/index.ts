@@ -47,6 +47,8 @@ export const api = {
   analytics: (days: number) => get<Analytics>('/admin/analytics?days=' + days),
   /** The link from the confirmation letter. Works without being logged in. */
   verifyEmail: (token: string) => post<void>('/auth/verify-email', { token }),
+  /** The six-digit code from the confirmation letter, typed by the person. */
+  confirmEmail: (code: string) => post<void>('/account/email-verification/confirm', { code }),
   /** "Send the confirmation letter again." The server allows it once a minute. */
   sendEmailVerification: () => post<void>('/account/email-verification/send'),
 

@@ -44,7 +44,9 @@ export const router = createRouter({
     },
     {
       // Registered or logged in, but the e-mail is not confirmed: the application is closed, and
-      // this is the only page there is. See views/ConfirmEmailView.vue.
+      // this is the only page there is - it asks for the code from the letter. It is reached
+      // from the login and registration forms only; opened in any other way (a reload, a
+      // bookmark) it leads to the login page. See views/ConfirmEmailView.vue.
       path: '/confirm-email',
       name: 'confirm-email',
       component: () => import('./views/ConfirmEmailView.vue'),
